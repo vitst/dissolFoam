@@ -5,10 +5,11 @@
 #include "DissolMeshRlx.H"
 #include <algorithm>
 
-DissolMeshRlx::DissolMeshRlx(const fvMesh& mesh)
+DissolMeshRlx::DissolMeshRlx(const fvMesh& mesh, const fvMesh& mesh1)
 :
   version(0.2),
-  mesh_(mesh)
+  mesh_(mesh),
+  mesh1_(mesh1)
 {
   // get ID of each patch we need
   wallID   = mesh_.boundaryMesh().findPatchID("walls");
@@ -156,8 +157,9 @@ void DissolMeshRlx::fixEdgeConcentration( scalarField& conc ){
     label pnt1 = mesh_.boundaryMesh()[wallID].whichPoint( (itr->second).first  );
     label pnt2 = mesh_.boundaryMesh()[wallID].whichPoint( (itr->second).second );
     
-    conc[ pnt0 ] = extrapolateConcentration(loc_points, conc, pnt0, pnt1, pnt2);
+    conc[ pnt0 ] = extrapolateConcentrationLinearZ(loc_points, conc, pnt0, pnt1, pnt2);
   }
+  
 /*
   for(std::map<int,int>::iterator itr  = wallCyclicEdgeToEdge.begin();
                                   itr != wallCyclicEdgeToEdge.end();
@@ -174,7 +176,7 @@ void DissolMeshRlx::fixEdgeConcentration( scalarField& conc ){
 */
 }
 
-scalar DissolMeshRlx::extrapolateConcentration(const pointField& loc_points,
+scalar DissolMeshRlx::extrapolateConcentrationExp(const pointField& loc_points,
                                 const scalarField& point_conc,
                                 label pnt0, label pnt1, label pnt2){
   scalar r02 = mag(  loc_points[pnt0] - loc_points[pnt2]  );
@@ -185,6 +187,26 @@ scalar DissolMeshRlx::extrapolateConcentration(const pointField& loc_points,
   return c2 * std::pow( c1/c2, r02/r12 );
 }
 
+scalar DissolMeshRlx::extrapolateConcentrationLinear(const pointField& loc_points,
+                                const scalarField& point_conc,
+                                label pnt0, label pnt1, label pnt2){
+  scalar r02 = mag(  loc_points[pnt0] - loc_points[pnt2]  );
+  scalar r12 = mag(  loc_points[pnt1] - loc_points[pnt2]  );
+  scalar c1 = point_conc[pnt1];
+  scalar c2 = point_conc[pnt2];
+
+  return c2 - (c2-c1) * r02/r12;
+}
+
+scalar DissolMeshRlx::extrapolateConcentrationLinearZ(const pointField& loc_points,
+                                const scalarField& point_conc,
+                                label pnt0, label pnt1, label pnt2){
+  scalar r02 = loc_points[pnt0].z() - loc_points[pnt2].z();
+  scalar r12 = loc_points[pnt1].z() - loc_points[pnt2].z();
+  scalar c1 = point_conc[pnt1];
+  scalar c2 = point_conc[pnt2];
+  return c2 - (c2-c1) * r02/r12;
+}
 
 
 void DissolMeshRlx::setUpPairsConc(){
@@ -200,7 +222,7 @@ void DissolMeshRlx::setUpPairsConc(){
     // check if edge belong to the surface
     label neighb     = -1; // near neighbor in z
     label nextneighb = -1; // next near neighbor in z
-    vector posP = mesh_.boundaryMesh()[wallID].localPoints()[indp];// position of the vertex we check
+    vector posP = mesh1_.boundaryMesh()[wallID].localPoints()[indp];// position of the vertex we check
 
     // this all just for first layer of vertices in z direction
     //if( posP.z()<0.005 ){
@@ -210,13 +232,13 @@ void DissolMeshRlx::setUpPairsConc(){
         lcl_wall_list_wallsInletEdges.end()
     ){
       forAll (elist, ind){
-        label segside = mesh_.edges()[elist[ind]].start();
-        if(segside==wallsToAll[indp]) segside = mesh_.edges()[elist[ind]].end();
+        label segside = mesh1_.edges()[elist[ind]].start();
+        if(segside==wallsToAll[indp]) segside = mesh1_.edges()[elist[ind]].end();
         
-        label neibIDonBound = mesh_.boundaryMesh()[wallID].whichPoint(segside);
+        label neibIDonBound = mesh1_.boundaryMesh()[wallID].whichPoint(segside);
         if ( neibIDonBound!=-1 ){
           // means segside is next neighbor of indp on the boundary    
-          vector posN = mesh_.points()[segside];// position of a neighbor
+          vector posN = mesh1_.points()[segside];// position of a neighbor
           
           // @TODO optimize, it may not work in general case
           if( posN.z()-posP.z()>0.01 ){
@@ -225,13 +247,13 @@ void DissolMeshRlx::setUpPairsConc(){
             labelList nelist = pe[neibIDonBound];
             // @TODO the same for neighb, DO it recursive lazy boy!!
             forAll (nelist, ind11){
-              label segside11 = mesh_.edges()[nelist[ind11]].start();
-              if(segside11==wallsToAll[neibIDonBound]) segside11 = mesh_.edges()[nelist[ind11]].end();
+              label segside11 = mesh1_.edges()[nelist[ind11]].start();
+              if(segside11==wallsToAll[neibIDonBound]) segside11 = mesh1_.edges()[nelist[ind11]].end();
 
-              label neibIDonBound11 = mesh_.boundaryMesh()[wallID].whichPoint(segside11);
+              label neibIDonBound11 = mesh1_.boundaryMesh()[wallID].whichPoint(segside11);
               if ( neibIDonBound11!=-1 ){
                 // means segside is next neighbor of neighb on the boundary
-                vector posN11 = mesh_.points()[segside11];// position of a neighbor
+                vector posN11 = mesh1_.points()[segside11];// position of a neighbor
 
                 // @TODO optimize, it may not work in general case
                 if( posN11.z()-posN.z()>0.01 ){
@@ -298,8 +320,8 @@ std::map<int,int>::iterator DissolMeshRlx::search2IntMapByKey(std::map<int,int>&
 
 void DissolMeshRlx::setUpPairsRlx(){
   // global edge list
-  const edgeList& e = mesh_.edges();
-  const polyBoundaryMesh& boundary_mesh_list = mesh_.boundaryMesh();
+  const edgeList& e = mesh1_.edges();
+  const polyBoundaryMesh& boundary_mesh_list = mesh1_.boundaryMesh();
 
   // set up storage for pointEdges
   List<SLList<label> > pointEdges(boundary_mesh_list[wallID].meshPoints().size());
@@ -341,14 +363,14 @@ void DissolMeshRlx::setUpPairsRlx(){
 
     label glob_lab = wallsToAll[indp];
     forAll (el, inde){
-      label segside = mesh_.edges()[el[inde]].start();
-      if(segside==wallsToAll[indp]) segside = mesh_.edges()[el[inde]].end();
+      label segside = mesh1_.edges()[el[inde]].start();
+      if(segside==wallsToAll[indp]) segside = mesh1_.edges()[el[inde]].end();
       if ( boundary_mesh_list[wallID].whichPoint(segside)==-1 ){
         // means segside is next internal neighbor of indp
         intNeighb = segside;
       }
       else{
-        vector posN = mesh_.points()[segside];// position of a neighbor
+        vector posN = mesh1_.points()[segside];// position of a neighbor
         if( posN.z()-posP.z()>0.01 ){
           bouNeighb = segside;
           //break;

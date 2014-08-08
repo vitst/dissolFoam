@@ -20,6 +20,9 @@ private:
 
   const fvMesh& mesh_;
 
+  const fvMesh& mesh1_;
+  
+  
   // ID of each patch
   label wallID, inletID, outletID, cyclicID;
 
@@ -63,12 +66,14 @@ private:
   std::map<int,int>::iterator search2IntMapByValue(std::map<int,int>&, int);
   std::map<int,int>::iterator search2IntMapByKey(std::map<int,int>&, int);
 
-  scalar extrapolateConcentration(const pointField&, const scalarField&, label, label, label);
+  scalar extrapolateConcentrationExp(const pointField&, const scalarField&, label, label, label);
+  scalar extrapolateConcentrationLinear(const pointField&, const scalarField&, label, label, label);
+  scalar extrapolateConcentrationLinearZ(const pointField&, const scalarField&, label, label, label);
 
 public:
   
   // Constructors
-  DissolMeshRlx(const fvMesh&);
+  DissolMeshRlx(const fvMesh&, const fvMesh&);
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 

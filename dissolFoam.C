@@ -1,25 +1,25 @@
 /*---------------------------------------------------------------------------*\
   =========                 |
-  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+  \\      /  F ield         | foam-extend: Open Source CFD
    \\    /   O peration     |
-    \\  /    A nd           | Copyright (C) 2011-2013 OpenFOAM Foundation
+    \\  /    A nd           | For copyright notice see file Copyright
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
 License
-    This file is part of OpenFOAM.
+    This file is part of foam-extend.
 
-    OpenFOAM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    foam-extend is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by the
+    Free Software Foundation, either version 3 of the License, or (at your
+    option) any later version.
 
-    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-    for more details.
+    foam-extend is distributed in the hope that it will be useful, but
+    WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
+    along with foam-extend.  If not, see <http://www.gnu.org/licenses/>.
 
 Application
     dissolFoam
@@ -27,9 +27,8 @@ Application
 Description
     Solves for flow (Stokes) and transport (steady-state) and moves
     the mesh according to the reactant flux.
+  
  * 
- * 
- *  Modified for OF ext 3.0.
  *  Surface relaxation added
  * 
 
@@ -37,22 +36,17 @@ Description
 
 
 
-
+// OF includes
 #include "fvCFD.H"
 #include "pointPatchField.H"
 #include "primitivePatchInterpolation.H"
 #include "dynamicFvMesh.H"
 #include "primitivePatch.H"
-
-
-//#include "fvPatchField.H"
-//#include "mixedPointPatchFields.H"
-
 #include "partialSlipModPointPatchFields.H"
-//#include "partialSlipModFvPatchFields.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
+// General includes
 #include <list>
 #include <math.h>
 #include <stdlib.h>
@@ -61,6 +55,8 @@ Description
 #include <fstream>
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Local includes
 #include "DissolMeshRlx.H"
 
 
@@ -69,20 +65,26 @@ Description
 // #######################################################################################
 
 
-
+/*
+ * Description
+ *   It calculates in how many substeps one time-step should be divided.
+ * TODO
+ *   parallel computation
+ */
 int setSubStep(const edgeList& edges, const pointField& points, const scalarField& concField){
-  
+  // define the maximum length of the displacement vector
   scalar max_mesh_step = 0;
   forAll(concField, ii){
     max_mesh_step = max(max_mesh_step, concField[ii]);
   }
-      
+  
+  // look for a smallest edge
   scalar min_edge = edges[0].mag(points);
   forAll(edges, i){
     min_edge = min(min_edge, edges[i].mag(points) );
   }
   
-  return (max_mesh_step / min_edge + 1);
+  return static_cast<int>(max_mesh_step / min_edge + 1);
 }
 
 
@@ -100,7 +102,7 @@ int setSubStep(const edgeList& edges, const pointField& points, const scalarFiel
  * z     /  \                   z    |          |
  * |_ y      <------ inlet -->  |_ x
  * 
- * controlDictionary should have subdictionary CONVECTION_DIFFUSION e.g.:
+ * controlDictionary should have a subdictionary: CONVECTION_DIFFUSION, e.g.:
  * 
  *      CONVECTION_DIFFUSION{
  *        convergence                 1e-9;
@@ -124,9 +126,32 @@ int main(int argc, char *argv[])
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
   label inletID = mesh.boundaryMesh().findPatchID("inlet");
-  
+
+  // mesh rlx
+  Foam::Time runTime1
+  (
+      Foam::Time::controlDictName,
+      args.rootPath(),
+      args.caseName(),
+      "system",
+      "constant",
+      !args.optionFound("noFunctionObjects")
+  );
+  Foam::instantList timeDirs = Foam::timeSelector::select0(runTime1, args);
+
+  Foam::fvMesh mesh1
+  (
+    Foam::IOobject
+    (
+      Foam::fvMesh::defaultRegion,
+      runTime1.timeName(),
+      runTime1,
+      Foam::IOobject::MUST_READ
+    )
+  );
+
   // reference to the mesh relaxation object
-  DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh);
+  DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh, mesh1);
 
   /*
    * run0timestep is used for skipping the Stokes and the convection-diffusion solvers
@@ -171,6 +196,7 @@ int main(int argc, char *argv[])
         #include "pEqn.H"
 
         // check convergence
+        // TODO introduce check if maxNumIter==0
         if( maxResidual < convergenceCriterion || counter >= maxNumIter ){
           Info<< nl <<" Convergence info: maxResidual: "<< maxResidual
                   <<"  convergence criterion: "<< convergenceCriterion <<nl
@@ -240,13 +266,13 @@ int main(int argc, char *argv[])
       /*############################################################################
        *   Write Output data
        * ###########################################################################*/
-      runTime++;
-      runTime.write();
+      runTime.writeNow();
       Info<< "Write data, after conv-diff" << nl << endl;
     }
     else{
       Info<< "dissolFoam: Skip the Stokes and the convection-diffusion solvers." << nl << endl;
     }
+    runTime++;
     
     /*##############################################################################
     *   Mesh relaxation
@@ -273,7 +299,9 @@ int main(int argc, char *argv[])
     
     Info<< "Starting calculation of mesh move substeps"<<nl<<endl;
     
-    int nsubsteps = setSubStep( mesh.edges(), mesh.points(), point_conc );
+    int nsubsteps_aux = setSubStep( mesh.edges(), mesh.points(), point_conc );
+    
+    int nsubsteps = static_cast<int>( nsubsteps_aux / 3.0 );
     
     double nsubsteps_inv = 1.0 / double(nsubsteps);
     
