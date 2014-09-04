@@ -44,6 +44,10 @@ Description
 #include "primitivePatch.H"
 #include "partialSlipModPointPatchFields.H"
 
+
+#include "interpolation.H"
+#include "meshSearch.H"
+
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 // General includes
@@ -152,6 +156,8 @@ int main(int argc, char *argv[])
 
   // reference to the mesh relaxation object
   DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh, mesh1);
+  
+  //std::exit(0);
 
   /*
    * run0timestep is used for skipping the Stokes and the convection-diffusion solvers
@@ -292,28 +298,89 @@ int main(int argc, char *argv[])
     // exponential extrapolation of the concentration on the edge vertices
     scalarField& point_conc = pointC;
     mesh_rlx->fixEdgeConcentration( point_conc );
-
+    
+    /*
+    // check interpolation
+    pointField wwalls = mesh.boundaryMesh()[wallID].localPoints();
+    autoPtr<interpolation<scalar> >interpolatorC(interpolation<scalar>::New( "cellPointFace",C ));
+    meshSearch searchEngine(mesh, true);
+    forAll(wwalls, iii){
+      label cellI = searchEngine.findNearestCell( wwalls[iii] );
+      label faceI = searchEngine.findNearestFace( wwalls[iii] );
+      scalar intpFieldC = interpolatorC->interpolate(wwalls[iii], cellI, faceI);
+      
+      
+      /*
+      if( std::abs(point_conc[iii] - intpFieldC) > 0.0001)
+      //if( wwalls[iii].z() < 0.0001)
+        Info<< "coord[" << iii << "]=" << wwalls[iii]<<" : "
+                << oldCField[iii] << "   :   "
+                << pointC[iii] <<"  intrpl: "<<intpFieldC<<nl;
+      * / 
+      point_conc[iii] = intpFieldC;
+    }
+    */
+    
+    /*
+    forAll(pointC, iii){
+      Info<< pointC[iii] << nl;
+    }
+    exit(0);
+     */
+    
+    
+    
 //  Mesh update 2.1: Adjust timestep to mesh resolution. UPD: timestep means number of 
     // time sub steps when we modify boundary using the same concentration field 
     // in order not to deform mesh too mush.
     
+    //Pout<< nl << nl;
+    
+    //Pout << "min "<< min( mesh.boundaryMesh()[wallID].localPoints() ) <<nl;
+    //Pout << "max "<< max( mesh.boundaryMesh()[wallID].localPoints() ) <<nl;
+    /*
+    forAll(mesh.boundaryMesh()[wallID].localPoints(), i){
+      Pout << "coord["<<i<<"]= "<< mesh.boundaryMesh()[wallID].localPoints()[i]<<nl;
+    }
+    */
+    
+    //Pout<< "edges0: "<< mesh.edges()[0]<<nl;
+    
     Info<< "Starting calculation of mesh move substeps"<<nl<<endl;
     
-    int nsubsteps_aux = setSubStep( mesh.edges(), mesh.points(), point_conc );
+    //int nsubsteps_aux = setSubStep( mesh.edges(), mesh.points(), point_conc );
     
-    int nsubsteps = static_cast<int>( nsubsteps_aux / 3.0 );
+    //int nsubsteps = static_cast<int>( nsubsteps_aux / 1.0 );
+    int nsubsteps = 1;
     
-    double nsubsteps_inv = 1.0 / double(nsubsteps);
+    //double nsubsteps_inv = 1.0 / double(nsubsteps);
+    double nsubsteps_inv = 1.0 / 1.0;
     
     scalarField pointCsub = pointC * nsubsteps_inv;
     
-    Info<< nl << "Number of substeps  "<< nsubsteps << nl << endl;
+    Info<< nl << "Number of substeps  "<< nsubsteps << "   factor: "<< nsubsteps_inv << nl << endl;
     
     for(int subi = 0; subi < nsubsteps; subi++)
     {
       Info<< nl << "Substep nr. "<< (subi+1) << "  of total "<< nsubsteps << endl;
       
-      vectorField pointDispWall = pointCsub * mesh.boundaryMesh()[wallID].pointNormals(); //*runTime.deltaTValue()
+      vectorField pointNormY = mesh.boundaryMesh()[wallID].pointNormals();
+      
+      /*
+      forAll(pointNormY, iii){
+        pointNormY[iii].x() = 0.0;
+        pointNormY[iii].z() = 0.0;
+      }
+       */
+      
+      
+      //vectorField pointDispWall = pointCsub * mesh.boundaryMesh()[wallID].pointNormals(); //*runTime.deltaTValue()
+      vectorField pointDispWall = pointCsub * pointNormY; //*runTime.deltaTValue()
+      
+      vectorField& pointDispWall_ = pointDispWall;
+      
+      mesh_rlx->fixWallDisplPeriodic( pointDispWall_ );
+      
 
 //  Mesh update 2.2: Inlet displacement
       vectorField& pdw = pointDispWall;
@@ -341,13 +408,15 @@ int main(int argc, char *argv[])
 
       Info<< nl << "Boundary mesh relaxation" << nl << endl;
       
-      for(int i=0; i<2; i++){
+      
+      for(int i=0; i<20; i++){
         vectorField boundaryRelax = mesh_rlx->wallRelaxation();
 
         vectorField &wallDispRelx = refCast<vectorField>(pointDisplacement.boundaryField()[wallID]);
         pointDisplacement.boundaryField()[wallID] == wallDispRelx + boundaryRelax;
         mesh.update();
       }
+      
       
       Info<< "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
             << " s" << "  ClockTime = " << runTime.elapsedClockTime()

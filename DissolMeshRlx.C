@@ -31,7 +31,10 @@ DissolMeshRlx::DissolMeshRlx(const fvMesh& mesh, const fvMesh& mesh1)
 
   setUpLists();
   setUpPairsRlx();
-  setUpPairsConc();  
+  setUpPairsConc();
+  
+  //Pout<< "proc: " << Pstream::myProcNo() << "   master?: "<< Pstream::master() << "\n";
+  //Pout<< "wallsToAll: " << wallsToAll.size() << "\n";
 }
 
 
@@ -79,7 +82,12 @@ vector DissolMeshRlx::vertexDisplZ( point A0, point A1, point A2 ){
   vector A0I = refA - A0;
   
   scalar z0I = newZ - A0.z();
-  scalar z0IdivG = z0I / A0I.z(); 
+  
+  if(A0I.z() == 0){
+    Info<< " WARNING!!! A0I.z()=0"<< nl;
+  }
+  
+  scalar z0IdivG = z0I / A0I.z();
   
   vector r0( A0I.x()*z0IdivG,
              A0I.y()*z0IdivG,
@@ -146,6 +154,24 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
   return pointDispInlet;
 }
 
+void DissolMeshRlx::fixWallDisplPeriodic( vectorField& pointDispWall ){
+  for(std::map<int,int>::iterator itr  = wallCyclicEdgeToEdge.begin();
+                                  itr != wallCyclicEdgeToEdge.end();
+                                ++itr ){
+    /*
+    Info<<" r1["<<itr->first<<"]: "<< pointDispWall[itr->first]
+        <<" r2["<<itr->second<<"]: "<< pointDispWall[itr->second]
+        <<endl;
+    */
+    
+    vector r_av = (pointDispWall[itr->first] + pointDispWall[itr->second]) * 0.5;
+    pointDispWall[itr->first] = r_av;
+    pointDispWall[itr->second] = r_av;
+  }
+}
+
+
+
 void DissolMeshRlx::fixEdgeConcentration( scalarField& conc ){
   // exponential extrapolation of the concentration on the edge vertexes
   const pointField& loc_points = mesh_.boundaryMesh()[wallID].localPoints();
@@ -157,7 +183,11 @@ void DissolMeshRlx::fixEdgeConcentration( scalarField& conc ){
     label pnt1 = mesh_.boundaryMesh()[wallID].whichPoint( (itr->second).first  );
     label pnt2 = mesh_.boundaryMesh()[wallID].whichPoint( (itr->second).second );
     
+    //scalar aaa = conc[ pnt0 ];
     conc[ pnt0 ] = extrapolateConcentrationLinearZ(loc_points, conc, pnt0, pnt1, pnt2);
+    //conc[ pnt0 ] = extrapolateConcentrationExp(loc_points, conc, pnt0, pnt1, pnt2);
+    
+    //Info << loc_points[pnt0] << "  : "<< aaa<<"   : "<<conc[pnt0]<< nl;
   }
   
 /*
@@ -273,7 +303,7 @@ void DissolMeshRlx::setUpPairsConc(){
   }
   
   // to fix cyclic boundary
-  /*
+  
   for(std::list<int>::iterator iter  = lcl_wall_list_wallsCyclicEdges.begin();
                                iter != lcl_wall_list_wallsCyclicEdges.end();
                              ++iter ){
@@ -287,9 +317,9 @@ void DissolMeshRlx::setUpPairsConc(){
           && search2IntMapByValue(wallCyclicEdgeToEdge, *iter1) == wallCyclicEdgeToEdge.end()
           && search2IntMapByKey(wallCyclicEdgeToEdge, *iter) == wallCyclicEdgeToEdge.end()
           && search2IntMapByKey(wallCyclicEdgeToEdge, *iter1) == wallCyclicEdgeToEdge.end()
-          && ( abs(mesh_.boundaryMesh()[wallID].localPoints()[*iter].y() -
+          && ( std::abs(mesh_.boundaryMesh()[wallID].localPoints()[*iter].y() -
                   mesh_.boundaryMesh()[wallID].localPoints()[*iter1].y()) < 0.0001)
-          && ( abs(mesh_.boundaryMesh()[wallID].localPoints()[*iter].z() -
+          && ( std::abs(mesh_.boundaryMesh()[wallID].localPoints()[*iter].z() -
                   mesh_.boundaryMesh()[wallID].localPoints()[*iter1].z()) < 0.0001)
         ){
         wallCyclicEdgeToEdge[*iter] = *iter1;
@@ -297,7 +327,7 @@ void DissolMeshRlx::setUpPairsConc(){
       }
     }
   }
-  */
+  
 
 }
 
@@ -346,6 +376,20 @@ void DissolMeshRlx::setUpPairsRlx(){
       pe[pointI][i] = curEdgesIter();
     }
   }
+  
+  /*
+  int poind = 0;
+  if( Pstream::master() ){
+    poind = 0;
+  }
+  else{
+    poind = 1172;
+  }
+  forAll( pe[poind], i ){
+    Pout<< "edges0: "<< e[pe[poind][i]]  <<nl;
+    //Pout<< "edges0: "<< boundary_mesh_list[wallID].localPoints()[ e[pe[poind][i]][1] ] <<nl;
+  }
+  */
 
   forAll (pe, indp){
     // list of edges

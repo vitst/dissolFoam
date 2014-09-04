@@ -61,7 +61,7 @@ private:
   std::map<int, std::pair<int, int> > edgeConcentrationFixMap;
 
   // map of corresponding cyclic-walls edges
-  //std::map<int, int> wallCyclicEdgeToEdge;
+  std::map<int, int> wallCyclicEdgeToEdge;
 
   std::map<int,int>::iterator search2IntMapByValue(std::map<int,int>&, int);
   std::map<int,int>::iterator search2IntMapByKey(std::map<int,int>&, int);
@@ -78,6 +78,7 @@ public:
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
   void fixEdgeConcentration( scalarField& );
+  void fixWallDisplPeriodic( vectorField& );
 
   // fix edge displacement and calculate inlet displ.
   vectorField calculateInletDisplacement( vectorField& );
