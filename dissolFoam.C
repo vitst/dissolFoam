@@ -141,6 +141,7 @@ int main(int argc, char *argv[])
       "constant",
       !args.optionFound("noFunctionObjects")
   );
+  
   Foam::instantList timeDirs = Foam::timeSelector::select0(runTime1, args);
 
   Foam::fvMesh mesh1
@@ -157,6 +158,7 @@ int main(int argc, char *argv[])
   // reference to the mesh relaxation object
   DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh, mesh1);
   
+  //mesh.
   //std::exit(0);
 
   /*
@@ -167,6 +169,16 @@ int main(int argc, char *argv[])
   if( runTime.value() == 0 ){  run0timestep = true; }
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+  /*
+  const fvBoundaryMesh& patches = mesh.boundary();
+  Info<< nl << nl << " !!Patchy: " << patches.size() << nl;
+  Info<< " !!Patchy0: " << patches[0].patch() << nl;
+  Info<< " !!Patchy1: " << patches[1].patch() << nl;
+  Info<< " !!Patchy2: " << patches[2].patch() << nl;
+  Info<< " !!Patchy3: " << patches[3].patch() << nl;
+  Info<< " !!Patchy4: " << patches[4].patch() << nl;
+  std::exit(0);
+   */
 
   // main time loop
   while (runTime.run())
@@ -221,7 +233,7 @@ int main(int argc, char *argv[])
         }
         else{
           // @TODO probably here we should switch relTol to 0
-          Info<< nl << nl <<" Step "<< counter <<"   maxResidual: "<< maxResidual
+          Info<< nl << " Step "<< counter <<"   maxResidual: "<< maxResidual
                     <<" > "<< convergenceCriterion <<nl<<endl;
         }
       }
@@ -263,7 +275,7 @@ int main(int argc, char *argv[])
         }
         else{
           // @TODO probably here we should switch relTol to 0
-          Info<< nl << nl <<" Step "<< counter
+          Info<< nl <<" Step "<< counter
                     <<"  residual: "<< residual
                     <<" > "<< convCritCD <<nl<<endl;
         }
@@ -272,7 +284,12 @@ int main(int argc, char *argv[])
       /*############################################################################
        *   Write Output data
        * ###########################################################################*/
-      runTime.writeNow();
+      if( runTime.value() == 0 ){ 
+        runTime.writeNow(); 
+      }
+      else{
+        runTime.write();
+      }
       Info<< "Write data, after conv-diff" << nl << endl;
     }
     else{
@@ -375,7 +392,7 @@ int main(int argc, char *argv[])
       
       
       //vectorField pointDispWall = pointCsub * mesh.boundaryMesh()[wallID].pointNormals(); //*runTime.deltaTValue()
-      vectorField pointDispWall = pointCsub * pointNormY; //*runTime.deltaTValue()
+      vectorField pointDispWall = pointCsub * pointNormY * runTime.deltaTValue();
       
       vectorField& pointDispWall_ = pointDispWall;
       
@@ -392,29 +409,56 @@ int main(int argc, char *argv[])
       vectorField &wallDisp = refCast<vectorField>(pointDisplacement.boundaryField()[wallID]);
       pointDisplacement.boundaryField()[wallID] == wallDisp + pointDispWall;
 
+      Info<< nl << "Wall displacement" << endl;
+      mesh.update();
+      
       vectorField &inletDisp = refCast<vectorField>(pointDisplacement.boundaryField()[inletID]);
       pointDisplacement.boundaryField()[inletID] == inletDisp + pointDispInlet;
-      
+
+      Info<< nl << "Inlet displacement" << endl;
       mesh.update();
+      
+      //runTime++;
+      //runTime.write();
+      
       partialSlipModPointPatchVectorField &p_dispPatch = 
                 dynamic_cast< partialSlipModPointPatchVectorField& >
                 (pointDisplacement.boundaryField()[inletID]);
       p_dispPatch.valueFraction() = false;
-      for(int ii=0; ii<5; ii++){  mesh.update();  }
+      for(int ii=0; ii<5; ii++){  
+        mesh.update();
+        
+      //runTime++;
+      //runTime.write();
+        
+      }
       p_dispPatch.valueFraction() = true;
       mesh.update();
+      
+      //runTime++;
+      //runTime.write();
       
 //  Mesh update 5: boundary mesh relaxation
 
       Info<< nl << "Boundary mesh relaxation" << nl << endl;
       
-      
       for(int i=0; i<20; i++){
         vectorField boundaryRelax = mesh_rlx->wallRelaxation();
+        
+        vectorField& boundaryRelax_ = boundaryRelax;
+        mesh_rlx->fixWallDisplPeriodic( boundaryRelax_ );
 
         vectorField &wallDispRelx = refCast<vectorField>(pointDisplacement.boundaryField()[wallID]);
         pointDisplacement.boundaryField()[wallID] == wallDispRelx + boundaryRelax;
+        
+        //Info<<"Before mesh update"<<nl;
         mesh.update();
+      //runTime++;
+      //runTime.write();
+        //Info<<"After mesh update"<<nl;
+        
+      //mesh_rlx->boundaryCheck();
+      
       }
       
       

@@ -22,7 +22,6 @@ private:
 
   const fvMesh& mesh1_;
   
-  
   // ID of each patch
   label wallID, inletID, outletID, cyclicID;
 
@@ -62,7 +61,8 @@ private:
 
   // map of corresponding cyclic-walls edges
   std::map<int, int> wallCyclicEdgeToEdge;
-
+  std::map<int, int> cyclicWallToWall;
+  
   std::map<int,int>::iterator search2IntMapByValue(std::map<int,int>&, int);
   std::map<int,int>::iterator search2IntMapByKey(std::map<int,int>&, int);
 
@@ -89,11 +89,14 @@ public:
 
   vector vertexDisplX(point, point, point);
   
+  void boundaryCheck();
+  void boundaryFix( pointField& );
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
   // set up pairs for wall mesh relaxation: neighbZrlx, neighbXrlx
   void setUpPairsRlx();
 
+  
   // set up pairs for concentration extrapollation on the edge
   void setUpPairsConc();
 
