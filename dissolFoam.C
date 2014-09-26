@@ -42,7 +42,7 @@ Description
 #include "primitivePatchInterpolation.H"
 #include "dynamicFvMesh.H"
 #include "primitivePatch.H"
-#include "partialSlipModPointPatchFields.H"
+#include "mixedSlipFixedValuePointPatchFields.H"
 
 
 #include "interpolation.H"
@@ -422,8 +422,9 @@ int main(int argc, char *argv[])
       //runTime.write();
       
       Info<< nl << "Inlet rlx" << endl;
-      partialSlipModPointPatchVectorField &p_dispPatch = 
-                dynamic_cast< partialSlipModPointPatchVectorField& >
+      
+      mixedSlipFixedValuePointPatchVectorField &p_dispPatch = 
+                dynamic_cast< mixedSlipFixedValuePointPatchVectorField& >
                 (pointDisplacement.boundaryField()[inletID]);
       p_dispPatch.valueFraction() = false;
       for(int ii=0; ii<5; ii++){  

@@ -5,8 +5,7 @@ EXE_INC = -DFULLDEBUG -g -O0 \
     -I$(FOAM_SRC)/meshTools/lnInclude \
     -I$(FOAM_SRC)/sampling/lnInclude \
     -I$(LIB_SRC)/lagrangian/basic/lnInclude \
-    -I$(WM_PROJECT_USER_DIR)/applications/libs/partialSlipModPointPatchField/lnInclude \
-    -I$(WM_PROJECT_USER_DIR)/applications/libs/fvpartialSlipMod/lnInclude \
+    -I$(WM_PROJECT_USER_DIR)/applications/libs/mixedSlipFixedValuePointPatchField/lnInclude \
 
 
     #-I$(FOAM_SRC)/turbulenceModels \
