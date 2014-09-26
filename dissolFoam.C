@@ -421,6 +421,7 @@ int main(int argc, char *argv[])
       //runTime++;
       //runTime.write();
       
+      Info<< nl << "Inlet rlx" << endl;
       partialSlipModPointPatchVectorField &p_dispPatch = 
                 dynamic_cast< partialSlipModPointPatchVectorField& >
                 (pointDisplacement.boundaryField()[inletID]);
@@ -432,6 +433,7 @@ int main(int argc, char *argv[])
       //runTime.write();
         
       }
+      Info<< nl << "Back to patch fixedValue" << endl;
       p_dispPatch.valueFraction() = true;
       mesh.update();
       
