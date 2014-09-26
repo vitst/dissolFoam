@@ -1,0 +1,35 @@
+EXE_INC = -DFULLDEBUG -g -O0 \
+    -I$(FOAM_SRC)/finiteVolume/lnInclude \
+    -I$(FOAM_SRC)/dynamicMesh/dynamicFvMesh/lnInclude \
+    -I$(FOAM_SRC)/dynamicMesh/dynamicMesh/lnInclude \
+    -I$(FOAM_SRC)/meshTools/lnInclude \
+    -I$(FOAM_SRC)/sampling/lnInclude \
+    -I$(LIB_SRC)/lagrangian/basic/lnInclude \
+    -I$(WM_PROJECT_USER_DIR)/applications/libs/partialSlipModPointPatchField/lnInclude \
+    -I$(WM_PROJECT_USER_DIR)/applications/libs/fvpartialSlipMod/lnInclude \
+
+
+    #-I$(FOAM_SRC)/turbulenceModels \
+    #-I$(FOAM_SRC)/coupledMatrix/lnInclude \
+    #-I$(FOAM_SRC)/transportModels \
+    #-I$(FOAM_SRC)/transportModels/incompressible/singlePhaseTransportModel \
+    #-I$(FOAM_SRC)/turbulenceModels/incompressible/RAS/RASModel \
+    #-I$(WM_PROJECT_USER_DIR)/applications/libs/simpleControlDissolution/lnInclude \
+    #-I$(LIB_SRC)/fvOptions/lnInclude \
+
+EXE_LIBS = \
+    -lfiniteVolume \
+    -ldynamicFvMesh \
+    -ldynamicMesh \
+    -lmeshTools \
+    -lsampling \
+    -llduSolvers \
+
+
+
+    #-lcoupledLduMatrix \
+    #-lincompressibleRASModels \
+    #-lincompressibleTransportModels \
+    #-L/home/vstar/OpenFOAM/vstar-2.2.2/platforms/linuxGccDPOpt/lib \
+    #-lsimpleControlDissolution
+    #-lfvOptions \

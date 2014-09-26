@@ -1,0 +1,4 @@
+DissolMeshRlx.C
+dissolFoam.C
+
+EXE = $(FOAM_USER_APPBIN)/dissolFoam
