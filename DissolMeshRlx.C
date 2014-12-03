@@ -5,6 +5,8 @@
 #include "DissolMeshRlx.H"
 #include <algorithm>
 
+#include "pyramidPointFaceRef.H"
+
 
 // mesh1 is the mesh at time 0
 DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh, const fvMesh& mesh1)
@@ -13,24 +15,36 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh, const fvMesh& mesh1)
   mesh_(mesh),
   mesh1_(mesh1)
 {
-          
+  /*
+   *   TOOOOODOOOOOOO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   *   periodicx !!!!!!!!!!!!!!!!!!!
+   * 
+   * 
+   * 
+   * 
+   */
+  
+  
   // get ID of each patch we need
   wallID   = mesh_.boundaryMesh().findPatchID("walls");
   inletID  = mesh_.boundaryMesh().findPatchID("inlet");
   outletID = mesh_.boundaryMesh().findPatchID("outlet");
-  cyclicID = mesh_.boundaryMesh().findPatchID("periodicx");
+  cyclicID1 = mesh_.boundaryMesh().findPatchID("periodicx1");
+  cyclicID2 = mesh_.boundaryMesh().findPatchID("periodicx2");
 
   // map vetex ID: patch to global
   wallsToAll  = mesh_.boundaryMesh()[wallID].meshPoints();
   inletToAll  = mesh_.boundaryMesh()[inletID].meshPoints();
   outletToAll = mesh_.boundaryMesh()[outletID].meshPoints();
-  cyclicToAll = mesh_.boundaryMesh()[cyclicID].meshPoints();
+  cyclicToAll1 = mesh_.boundaryMesh()[cyclicID1].meshPoints();
+  cyclicToAll2 = mesh_.boundaryMesh()[cyclicID2].meshPoints();
 
   // map vertex ID: global to patch
   forAll(wallsToAll,  i){  allToWalls[wallsToAll[i]]   = i;  }
   forAll(inletToAll,  i){  allToInlet[inletToAll[i]]   = i;  }
   forAll(outletToAll, i){  allToOutlet[outletToAll[i]] = i;  }
-  forAll(cyclicToAll, i){  allToCyclic[cyclicToAll[i]] = i;  }
+  forAll(cyclicToAll1, i){  allToCyclic1[cyclicToAll1[i]] = i;  }
+  forAll(cyclicToAll2, i){  allToCyclic2[cyclicToAll2[i]] = i;  }
 
   setUpLists();
   setUpPairsRlx();
@@ -40,25 +54,66 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh, const fvMesh& mesh1)
   Pout<< "wallsToAll: " << wallsToAll.size() << "\n";
 }
 
+
+void DissolMeshRlx::checkFacePyramidsMy()
+{
+    const scalar minPyrVol = -1e-20;
+
+    // check whether face area vector points to the cell with higher label
+    const vectorField& ctrs = mesh_.cellCentres();
+    const labelList& own = mesh_.faceOwner();
+    const labelList& nei = mesh_.faceNeighbour();
+    const faceList& f = mesh_.faces();
+    const pointField& p = mesh_.points();
+
+    label nErrorPyrs = 0;
+
+    forAll (f, faceI){
+        // Create the owner pyramid - it will have negative volume
+        scalar pyrVol = pyramidPointFaceRef(f[faceI], ctrs[own[faceI]]).mag(p);
+
+        if (pyrVol > -minPyrVol) nErrorPyrs++;
+
+        if (mesh_.isInternalFace(faceI)){
+            // Create the neighbour pyramid - it will have positive volume
+            scalar pyrVol =
+                pyramidPointFaceRef(f[faceI], ctrs[nei[faceI]]).mag(p);
+
+            if (pyrVol < minPyrVol) nErrorPyrs++;
+        }
+    }
+
+    reduce(nErrorPyrs, sumOp<label>());
+
+    if (nErrorPyrs > 0)
+      Info<< " ***Error in face pyramids: "
+          << nErrorPyrs << " faces are incorrectly oriented."
+          << endl;
+    else
+      Info<< "    Face pyramids OK." << endl;
+}
+
+
 void DissolMeshRlx::boundaryCheck(){
-  const pointField& loc_points = mesh_.boundaryMesh()[cyclicID].localPoints();
+  const pointField& loc_points1 = mesh_.boundaryMesh()[cyclicID1].localPoints();
+  const pointField& loc_points2 = mesh_.boundaryMesh()[cyclicID2].localPoints();
   
   for(std::map<int,int>::iterator itr  = cyclicWallToWall.begin();
                                   itr != cyclicWallToWall.end();
                                 ++itr ){
     //Info << loc_points[pnt0] << "  : "<< aaa<<"   : "<<conc[pnt0]<< nl;
-    scalar dist = std::sqrt( (loc_points[itr->first].y()-loc_points[itr->second].y())
+    scalar dist = std::sqrt( (loc_points1[itr->first].y()-loc_points2[itr->second].y())
                              *
-                             (loc_points[itr->first].y()-loc_points[itr->second].y())
+                             (loc_points1[itr->first].y()-loc_points2[itr->second].y())
                              +
-                             (loc_points[itr->first].z()-loc_points[itr->second].z())
+                             (loc_points1[itr->first].z()-loc_points2[itr->second].z())
                              *
-                             (loc_points[itr->first].z()-loc_points[itr->second].z())
+                             (loc_points1[itr->first].z()-loc_points2[itr->second].z())
                             );
     
     if( dist>0.0000001 ){
-      Info<<" r+["<<itr->first<<"]: "<< loc_points[itr->first]
-          <<"   r-["<<itr->second<<"]: "<< loc_points[itr->second]
+      Info<<" r+["<<itr->first<<"]: "<< loc_points1[itr->first]
+          <<"   r-["<<itr->second<<"]: "<< loc_points2[itr->second]
           << "  dist: "<< dist
           <<endl;
     }
@@ -66,6 +121,7 @@ void DissolMeshRlx::boundaryCheck(){
   //std::exit(0);
 }
 
+// @TODO it is wrong 
 void DissolMeshRlx::boundaryFix( pointField& newPoints ){
   for(std::map<int,int>::iterator itr  = cyclicWallToWall.begin();
                                   itr != cyclicWallToWall.end();
@@ -77,33 +133,114 @@ void DissolMeshRlx::boundaryFix( pointField& newPoints ){
 }
 
 
-vectorField DissolMeshRlx::wallRelaxation(){
-  vectorField boundaryRelax(mesh_.boundaryMesh()[wallID].localPoints().size(), vector::zero);
+vectorField DissolMeshRlx::wallRelaxation(int N){
+  vectorField boundaryCopy = mesh_.boundaryMesh()[wallID].localPoints();
+  
+  for(int i=0; i<N; i++){
+  
+    vectorField boundaryRelax(mesh_.boundaryMesh()[wallID].localPoints().size(), vector::zero);
 
-  for(std::map<int, std::pair<int, int> >::iterator iter  = neighbZrlx.begin();
-						    iter != neighbZrlx.end();
-					          ++iter){
-    if(iter->second.first!=-1 && iter->second.second!=-1){
-      point A0 = mesh_.boundaryMesh()[wallID].localPoints()[iter->first];
-      point A1 = mesh_.points()[iter->second.first];
-      point A2 = mesh_.points()[iter->second.second];
-      boundaryRelax[iter->first] = vertexDisplZ(A0, A1, A2);
+    for(std::map<int, std::pair<int, int> >::iterator iter  = neighbZrlx.begin();
+                              iter != neighbZrlx.end();
+                                ++iter){
+      if(iter->second.first!=-1 && iter->second.second!=-1){
+        point A0 = boundaryCopy[iter->first];
+        point A1 = boundaryCopy[ allToWalls[iter->second.first] ];
+        point A2 = boundaryCopy[ allToWalls[iter->second.second] ];
+        boundaryRelax[iter->first] = vertexDispl(A0, A1, A2);
+        
+        /*
+        if( A0.z()<24.1 && A0.z()>23.9 ){
+          Info<< iter->first<< " " << A0 
+                  << " | " << iter->second.first << "  " << iter->second.second << "  " 
+                  << A1 << "  " << A2
+                  << "  | bound relax " << boundaryRelax[iter->first]
+                  << nl;
+        }
+        */
+        
+        
+      }
     }
-  }
-
-  for(std::map<int, std::pair<int, int> >::iterator iter  = neighbXrlx.begin();
-						    iter != neighbXrlx.end();
-					          ++iter){
-    if(iter->second.first!=-1 && iter->second.second!=-1){
-      point A0 = mesh_.boundaryMesh()[wallID].localPoints()[iter->first];
-      point A1 = mesh_.points()[iter->second.first];
-      point A2 = mesh_.points()[iter->second.second];
-      boundaryRelax[iter->first] += vertexDisplX(A0, A1, A2);
+    for(std::map<int, std::pair<int, int> >::iterator iter  = neighbXrlx.begin();
+                              iter != neighbXrlx.end();
+                                ++iter){
+      if(iter->second.first!=-1 && iter->second.second!=-1){
+        point A0 = boundaryCopy[ iter->first ];
+        point A1 = boundaryCopy[ allToWalls[iter->second.first] ];
+        point A2 = boundaryCopy[ allToWalls[iter->second.second] ];
+        boundaryRelax[iter->first] += vertexDispl(A0, A1, A2);
+      }
     }
+    
+    boundaryCopy += boundaryRelax;
   }
   
-  return boundaryRelax;
+  vectorField finalDisplacements = boundaryCopy - mesh_.boundaryMesh()[wallID].localPoints();
+  
+  return finalDisplacements;
 }
+
+
+
+vectorField DissolMeshRlx::wallRelaxation(int N, const vectorField& wallPos){
+  //vectorField boundaryCopy = mesh_.boundaryMesh()[wallID].localPoints();
+  vectorField boundaryCopy = wallPos;
+  
+  for(int i=0; i<N; i++){
+  
+    vectorField boundaryRelax(wallPos.size(), vector::zero);
+
+    for(std::map<int, std::pair<int, int> >::iterator iter  = neighbZrlx.begin();
+                              iter != neighbZrlx.end();
+                                ++iter){
+      if(iter->second.first!=-1 && iter->second.second!=-1){
+        point A0 = boundaryCopy[iter->first];
+        point A1 = boundaryCopy[ allToWalls[iter->second.first] ];
+        point A2 = boundaryCopy[ allToWalls[iter->second.second] ];
+        boundaryRelax[iter->first] = vertexDispl(A0, A1, A2);
+        
+        /*
+        if( A0.z()<24.1 && A0.z()>23.9 ){
+          Info<< iter->first<< " " << A0 
+                  << " | " << iter->second.first << "  " << iter->second.second << "  " 
+                  << A1 << "  " << A2
+                  << "  | bound relax " << boundaryRelax[iter->first]
+                  << nl;
+        }
+        */
+        
+        
+      }
+    }
+    for(std::map<int, std::pair<int, int> >::iterator iter  = neighbXrlx.begin();
+                              iter != neighbXrlx.end();
+                                ++iter){
+      if(iter->second.first!=-1 && iter->second.second!=-1){
+        point A0 = boundaryCopy[ iter->first ];
+        point A1 = boundaryCopy[ allToWalls[iter->second.first] ];
+        point A2 = boundaryCopy[ allToWalls[iter->second.second] ];
+        boundaryRelax[iter->first] += vertexDispl(A0, A1, A2);
+      }
+    }
+    
+    boundaryCopy += boundaryRelax;
+  }
+  
+  vectorField finalDisplacements = boundaryCopy - wallPos;
+  
+  return finalDisplacements;
+}
+
+
+
+
+
+
+
+
+
+
 
 /*#######################################################################################
  *  * A0 - boundary which has to be moved.
@@ -167,6 +304,29 @@ vector DissolMeshRlx::vertexDisplX( point A0, point A1, point A2 ){
   return r0;
 }
 
+/*#######################################################################################
+ *  * the relaxation on the edge in order to keep uniform distribution
+ *  * A0 - central point
+ *  * A1, A2 - neighbors
+ *#######################################################################################*/
+vector DissolMeshRlx::vertexDispl( point A0, point A1, point A2 ){
+
+  vector d1  = A1 - A0;
+  vector d2  = A2 - A0;
+  vector d12 = A1 - A2;
+  scalar b   = (d1+d2) & d12;
+  scalar a   = fabs(b)/((d12 & d12) + fabs(b));
+  
+  scalar alpha = 0.5;
+  
+  vector r0;
+  if (b > 0)
+    r0 = alpha * a*d1;
+  else
+    r0 = alpha * a*d2;
+                
+  return r0;
+}
 
 
 vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
@@ -249,6 +409,41 @@ void DissolMeshRlx::fixEdgeConcentration( scalarField& conc ){
     conc[itr->second] = c_av;
   }
 */
+}
+
+
+void DissolMeshRlx::fixCyclicNormal( vectorField& norm, scalarField& conc ){
+  for(std::map<int,int>::iterator itr  = wallCyclicEdgeToEdge.begin();
+                                  itr != wallCyclicEdgeToEdge.end();
+                                ++itr ){
+    /*
+    vector av = norm[itr->first] + norm[itr->second];
+    vector n_av = av / mag(av);
+    norm[itr->first] = n_av;
+    norm[itr->second] = n_av;
+    
+    scalar c_av = (conc[itr->first] + conc[itr->second]) * 0.5;
+    conc[itr->first] = c_av;
+    conc[itr->second] = c_av;
+    */
+    norm[itr->first] *= 0.5;
+    norm[itr->second] *= 0.5;
+    conc[itr->first] *= 0.5;
+    conc[itr->second] *= 0.5;
+  }
+
+  /*
+  forAll(cornerPoints, i){
+    vector nnn = norm[cornerPoints[i]];
+    vector& corner_n = norm[cornerPoints[i]];
+    corner_n.z() = 0.0;
+    corner_n.x() = 0.0;
+    corner_n /= mag( corner_n );
+    //Info << " Corner points! " << norm[cornerPoints[i]] << "  and before: " << nnn << nl;
+  }
+  */
+  
+  //std::exit(0);
 }
 
 scalar DissolMeshRlx::extrapolateConcentrationExp(const pointField& loc_points,
@@ -374,20 +569,43 @@ void DissolMeshRlx::setUpPairsConc(){
     }
   }
   
-  pointField cyclic_points = mesh_.boundaryMesh()[cyclicID].localPoints();
-  forAll(cyclic_points, i){
-    forAll(cyclic_points, i1 ){
-      if( i != i1
-          && ( std::abs(cyclic_points[i].y() -
-                        cyclic_points[i1].y()) < 0.0001)
-          && ( std::abs(cyclic_points[i].z() -
-                        cyclic_points[i1].z()) < 0.0001)
-          && search2IntMapByValue(cyclicWallToWall, i) == cyclicWallToWall.end()
-          && search2IntMapByValue(cyclicWallToWall, i1) == cyclicWallToWall.end()
-          && search2IntMapByKey(cyclicWallToWall, i) == cyclicWallToWall.end()
+  
+  // fill the corner list at the outlet
+  for(std::map<int,int>::iterator itr  = wallCyclicEdgeToEdge.begin();
+                                  itr != wallCyclicEdgeToEdge.end();
+                                ++itr ){
+    label id1 = itr->first;
+    label id2 = itr->second;
+
+    label idAll1 = wallsToAll[id1];
+    //label idAll2 = wallsToAll[id2];
+
+    if( mesh1_.boundaryMesh()[outletID].whichPoint(idAll1)!=-1 ){
+      cornerPoints.append( id1 );
+      cornerPoints.append( id2 );
+    }
+
+  }
+  
+
+  
+  
+  
+  pointField cyclic_points1 = mesh_.boundaryMesh()[cyclicID1].localPoints();
+  pointField cyclic_points2 = mesh_.boundaryMesh()[cyclicID2].localPoints();
+  forAll(cyclic_points1, i1){
+    forAll(cyclic_points2, i2 ){
+      if(
+          ( std::abs(cyclic_points1[i1].y() -
+                        cyclic_points2[i2].y()) < 0.0001)
+          && ( std::abs(cyclic_points1[i1].z() -
+                        cyclic_points2[i2].z()) < 0.0001)
+          //&& search2IntMapByValue(cyclicWallToWall, i1) == cyclicWallToWall.end()
+          && search2IntMapByValue(cyclicWallToWall, i2) == cyclicWallToWall.end()
           && search2IntMapByKey(cyclicWallToWall, i1) == cyclicWallToWall.end()
+          //&& search2IntMapByKey(cyclicWallToWall, i2) == cyclicWallToWall.end()
               ){
-        cyclicWallToWall[i] = i1;
+        cyclicWallToWall[i1] = i2;
         break;
       }
     }
@@ -505,13 +723,17 @@ void DissolMeshRlx::setUpPairsRlx(){
     if( allToInlet.find( glob_lab ) == allToInlet.end() && allToOutlet.find( glob_lab ) == allToOutlet.end() ){
       neighbZrlx[indp] = std::make_pair(bouNeighb, bouNeighbLow);
     }
-    if( allToCyclic.find( glob_lab ) == allToCyclic.end() ){
+    //if( allToCyclic.find( glob_lab ) == allToCyclic.end() ){
+    if( 
+            allToCyclic1.find( glob_lab ) == allToCyclic1.end()
+            &&
+            allToCyclic2.find( glob_lab ) == allToCyclic2.end()
+      ){
       neighbXrlx[indp] = std::make_pair(nBX, nLX);
     }
     nBX = -1; nLX = -1;
   }
-
-
+  
 }
 
 void DissolMeshRlx::setUpLists(){
@@ -534,14 +756,27 @@ void DissolMeshRlx::setUpLists(){
     }
 
     // create walls-cyclic edge list of vertex IDs
-    std::map<int,int>::iterator iC = allToCyclic.find( lW );
-    if(iC != allToCyclic.end()){
-      glb_list_wallsCyclicEdges.push_back( iC->second ); //element found;
+    std::map<int,int>::iterator iC1 = allToCyclic1.find( lW );
+    std::map<int,int>::iterator iC2 = allToCyclic2.find( lW );
+    if( iC1 != allToCyclic1.end() ){
+      glb_list_wallsCyclicEdges.push_back( iC1->second ); //element found;
       lcl_wall_list_wallsCyclicEdges.push_back( ii );
+    }
+    if( iC2 != allToCyclic2.end() ){
+      glb_list_wallsCyclicEdges.push_back( iC2->second ); //element found;
+      lcl_wall_list_wallsCyclicEdges.push_back( ii );
+    }
+    
+    forAll(mesh1_.boundaryMesh(), patchI){
+      if( mesh1_.boundaryMesh()[patchI].coupled() ){
+        if( mesh1_.boundaryMesh()[patchI].whichPoint( lW ) != -1 ){
+          edgePoints.append( ii );
+        }
+      }
     }
 
   }
-
+  
 }
 
 float DissolMeshRlx::get_version(){

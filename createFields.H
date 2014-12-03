@@ -7,7 +7,7 @@
             "transportProperties",
             runTime.constant(),
             mesh,
-            IOobject::MUST_READ,//IOobject::MUST_READ_IF_MODIFIED,
+            IOobject::MUST_READ,
             IOobject::NO_WRITE
         )
     );
@@ -70,13 +70,12 @@
     );
 
 
-#   include "createPhi.H"
+    # include "createPhi.H"
 
     label pRefCell = 0;
     scalar pRefValue = 0.0;
     setRefCell(p, mesh.solutionDict().subDict("SIMPLE"), pRefCell, pRefValue    );
     
-/////////////////////////////
     /*
     singlePhaseTransportModel laminarTransport(U, phi);
 
@@ -84,6 +83,6 @@
     (
         incompressible::RASModel::New(U, phi, laminarTransport)
     );
-     */
+    */
     
 

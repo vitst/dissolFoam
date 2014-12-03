@@ -23,13 +23,13 @@ private:
   const fvMesh& mesh1_;
   
   // ID of each patch
-  label wallID, inletID, outletID, cyclicID;
+  label wallID, inletID, outletID, cyclicID1, cyclicID2;
 
   // vetex ID maps: patch to global
-  labelList wallsToAll, inletToAll, outletToAll, cyclicToAll;
+  labelList wallsToAll, inletToAll, outletToAll, cyclicToAll1, cyclicToAll2;
 
   // oposite to previous lists. Map IDs global to patch
-  std::map<int,int> allToInlet, allToOutlet, allToCyclic, allToWalls;
+  std::map<int,int> allToInlet, allToOutlet, allToCyclic1, allToCyclic2, allToWalls;
 
   // list of global IDs for walls- inlet and outlet edges
   std::list<int> glb_list_wallsInletEdges;
@@ -43,7 +43,14 @@ private:
 
   labelListList pe;
 
-
+  labelList cornerPoints; // belong to outlet, wall and periodic. Stores wall point ID
+  
+  
+  
+  labelList edgePoints; // when a point belongs to the wall and any coupled patch. Stores wall point ID
+  
+  
+  
   /*
    * main maps used for wall surface relaxation, approximatelly each vertex on the wall
    * initially looks like:
@@ -79,15 +86,29 @@ public:
 
   void fixEdgeConcentration( scalarField& );
   void fixWallDisplPeriodic( vectorField& );
+  void fixCyclicNormal( vectorField&, scalarField& );
+  
+  //template<typename T> void averageCoupled( Field<T>& );
+  template<typename T>
+  void averageCoupled( Field<T>& field ){
+    forAll(edgePoints, i){
+      field[ edgePoints[i] ] *= 0.5;
+    }
+    Info<< "field size: " << field.size() << nl;
+  }
+
 
   // fix edge displacement and calculate inlet displ.
   vectorField calculateInletDisplacement( vectorField& );
 
-  vectorField wallRelaxation();
+  vectorField wallRelaxation(int);
+  vectorField wallRelaxation(int, const vectorField&);
 
   vector vertexDisplZ(point, point, point);
 
   vector vertexDisplX(point, point, point);
+  
+  vector vertexDispl(point, point, point);
   
   void boundaryCheck();
   void boundaryFix( pointField& );
@@ -103,6 +124,10 @@ public:
   // setup lists needed for mesh relaxation
   void setUpLists();
 
+  // setup lists needed for mesh relaxation
+  void checkFacePyramidsMy();
+  
+  
   // set/get methods
   float get_version();
 };
