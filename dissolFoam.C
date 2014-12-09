@@ -99,42 +99,19 @@ int main(int argc, char *argv[])
     )
   );
 
+/*
   word motionType
   (
     dissolProperties.lookup("motionBasedOn")
   );
   
   Info << "The "<<motionType<< " field is used to calculate the walls motion"<<nl;
-  
-  Info << "Always make sure you use correct boundary condition for walls"<<nl;
+ */
   
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
-  
-  if(motionType=="C"){
-    if ( C.boundaryField()[wallID].type() != "groovyBC" ){
-        FatalErrorIn( "dissolFoam solver" )
-            << "wrong walls boundary condition. Now: "
-            << C.boundaryField()[wallID].type()
-            << ", should be groovyBC in order to fit motionBasedOn "
-            << motionType
-            << abort(FatalError);
-    }
-  }
-  else{
-    if ( C.boundaryField()[wallID].type() != "fixedValue" ){
-        FatalErrorIn( "dissolFoam solver" )
-            << "wrong walls boundary condition. Now: "
-            << C.boundaryField()[wallID].type()
-            << ", should be fixedValue in order to fit motionBasedOn "
-            << motionType
-            << abort(FatalError);
-    }
-  }
-  
-  
   label inletID = mesh.boundaryMesh().findPatchID("inlet");
   
   // mesh rlx
@@ -277,14 +254,7 @@ int main(int argc, char *argv[])
     // interpolate the concentration from cells to wall faces
     primitivePatchInterpolationSync patchInterpolator( mesh.boundaryMesh()[wallID], mesh );
     
-    scalarField pointCface;
-    if(motionType=="C"){
-      pointCface = C.boundaryField()[wallID];
-    }
-    else{
-      pointCface = -C.boundaryField()[wallID].snGrad();
-    }
-    
+    scalarField pointCface = -C.boundaryField()[wallID].snGrad();
     vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
     vectorField motionVec = pointCface * pointNface;
 
@@ -306,29 +276,29 @@ int main(int argc, char *argv[])
     pointVelocity.boundaryField()[inletID] == zeroInlet;
     pointVelocity.boundaryField()[wallID] == zeroWall;
     // ****************************************************************
-
+    
+    
 //  Mesh update 5: boundary mesh relaxation
     Info<<nl<<"Boundary mesh relaxation"<<nl<<nl;
-    for(int i=0; i<5; i++){
-      vectorField boundaryRelax = mesh_rlx->wallRelaxation(1000);
-      
-      Foam::polyMesh& meshParent = refCast<Foam::polyMesh>(mesh);
-      const labelList& meshPoints = mesh.boundaryMesh()[wallID].meshPoints();
-      syncTools::syncPointList( meshParent, meshPoints, boundaryRelax, plusEqOp<vector>(), vector::zero);
-      
+    for(int i=0; i<100; i++){
+      //vectorField boundaryRelax = mesh_rlx->wallRelaxation(1000);
+      vectorField boundaryRelax = mesh_rlx->wallRelaxation1();
       pointVelocity.boundaryField()[wallID] == boundaryRelax;
       mesh.update();
+      
       //runTime++;
       //runTime.write();
     }
     // *******************************
-    
+/*    
     // Internal points relaxation
     pointVelocity.boundaryField()[inletID] == zeroInlet;
     pointVelocity.boundaryField()[wallID] == zeroWall;
+    
     for(int ij=0;ij<5; ij++){
       mesh.update();
     }
+ */
     Info<< "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
           << " s" << "  ClockTime = " << runTime.elapsedClockTime()
           << " s" << nl << nl;

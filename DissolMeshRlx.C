@@ -5,7 +5,14 @@
 #include "DissolMeshRlx.H"
 #include <algorithm>
 
+#include "Pstream.H"
+
 #include "pyramidPointFaceRef.H"
+#include "syncTools.H"
+
+#include "transformField.H"
+#include "symmTransformField.H"
+#include "primitivePatchInterpolationSync.H"
 
 
 // mesh1 is the mesh at time 0
@@ -50,8 +57,12 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh, const fvMesh& mesh1)
   setUpPairsRlx();
   setUpPairsConc();
   
-  Pout<< "proc: " << Pstream::myProcNo() << "   master?: "<< Pstream::master() << "\n";
-  Pout<< "wallsToAll: " << wallsToAll.size() << "\n";
+  //scalar pn = 3*(1+Pstream::myProcNo());
+  //Pout<< "proc: " << Pstream::myProcNo() << "   master?: "<< Pstream::master() << nl;
+  //Pout<< "wallsToAll: " << wallsToAll.size() << "\n";
+  //reduce(pn, maxOp<scalar>());
+  //Pout<< "After pn: " << pn  << nl;
+  //std::exit(0);
 }
 
 
@@ -133,6 +144,203 @@ void DissolMeshRlx::boundaryFix( pointField& newPoints ){
 }
 
 
+
+
+
+
+vectorField DissolMeshRlx::wallRelaxation1(){
+  const labelList& meshPoints = mesh_.boundaryMesh()[wallID].meshPoints();
+
+  const pointField& boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();
+  const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
+  const pointField& faceCs = mesh_.boundaryMesh()[wallID].faceCentres();
+  scalar alpha = 0.5;
+  
+  vectorField sumDistance( boundaryPoints.size() );
+  scalarField numberNeighb( boundaryPoints.size() );
+  scalarField shlp( boundaryPoints.size(), 1.0 );
+  
+  forAll(boundaryPoints, i){
+    point curP = boundaryPoints[i];
+    const labelList& pFaces = plistFaces[i];
+    
+    numberNeighb[i] = plistFaces[i].size();
+    
+    vector sumw(0,0,0);
+    forAll(pFaces, j){
+      label faceI = pFaces[j];
+      point faceC = faceCs[faceI];
+      
+      vector d = faceC - curP;
+      scalar dist = mag(d);
+      
+      sumw += d;
+    }
+    
+    sumDistance[i] = sumw;
+    
+    shlp[i] = numberNeighb[i];
+  }
+  
+  syncTools::syncPointList( mesh_, meshPoints, sumDistance, plusEqOp<vector>(), vector::zero);
+  syncTools::syncPointList( mesh_, meshPoints, shlp, plusEqOp<scalar>(), 0.0);
+
+  vectorField averDistance( boundaryPoints.size() );
+  
+  forAll(averDistance, i){
+    averDistance[i] = sumDistance[i] / shlp[i];
+  }
+  
+  /*
+  forAll(shlp ,i){
+    if( shlp[i]<4 ){
+      point curP = boundaryPoints[i];
+      Pout << shlp[i] << "  " << curP << nl;
+    }
+  }
+  std::exit(0);
+   */
+   
+  
+  vectorField displacement( boundaryPoints.size() );
+  
+  forAll(displacement, i){
+    displacement[i] =  averDistance[i];
+  }
+  
+  vectorField fNorm = mesh_.boundaryMesh()[wallID].faceNormals();
+  primitivePatchInterpolationSync patchInterpolator( mesh_.boundaryMesh()[wallID], mesh_ );
+  vectorField pointNorm = patchInterpolator.faceToPointInterpolate(fNorm);
+  vectorField ttt = transform(I - pointNorm*pointNorm, displacement);
+
+  // project back inlet
+  vector n(0,0,1);
+  vectorField inletEdgeD( lcl_wall_list_wallsInletEdges.size() );
+  for(std::list<int>::iterator iter  = lcl_wall_list_wallsInletEdges.begin();
+                               iter != lcl_wall_list_wallsInletEdges.end();
+                             ++iter )
+  {
+    label id = std::distance(lcl_wall_list_wallsInletEdges.begin(), iter);
+    inletEdgeD[id] = ttt[*iter];
+  }
+  vectorField inletPrj = transform(I - n*n, inletEdgeD);
+  for(std::list<int>::iterator iter  = lcl_wall_list_wallsInletEdges.begin();
+                               iter != lcl_wall_list_wallsInletEdges.end();
+                             ++iter )
+  {
+    label id = std::distance(lcl_wall_list_wallsInletEdges.begin(), iter);
+    ttt[*iter] = inletPrj[id];
+  }
+  // project back outlet
+  vectorField outletEdgeD( lcl_wall_list_wallsOutletEdges.size() );
+  for(std::list<int>::iterator iter  = lcl_wall_list_wallsOutletEdges.begin();
+                               iter != lcl_wall_list_wallsOutletEdges.end();
+                             ++iter )
+  {
+    label id = std::distance(lcl_wall_list_wallsOutletEdges.begin(), iter);
+    outletEdgeD[id] = ttt[*iter];
+  }
+  vectorField outletPrj = transform(I - n*n, outletEdgeD);
+  for(std::list<int>::iterator iter  = lcl_wall_list_wallsOutletEdges.begin();
+                               iter != lcl_wall_list_wallsOutletEdges.end();
+                             ++iter )
+  {
+    label id = std::distance(lcl_wall_list_wallsOutletEdges.begin(), iter);
+    ttt[*iter] = outletPrj[id];
+  }
+  
+  return ttt; //displacement;
+}
+
+
+
+/*
+vectorField DissolMeshRlx::wallRelaxation1(){
+  const labelList& meshPoints = mesh_.boundaryMesh()[wallID].meshPoints();
+
+  const pointField& boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();
+  const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
+  const pointField& faceCs = mesh_.boundaryMesh()[wallID].faceCentres();
+  scalar alpha = 0.25;
+  
+  scalarField sumDistance( boundaryPoints.size() );
+  scalarField numberNeighb( boundaryPoints.size() );
+  
+  forAll(boundaryPoints, i){
+    point curP = boundaryPoints[i];
+    const labelList& pFaces = plistFaces[i];
+    
+    numberNeighb[i] = plistFaces.size();
+    
+    scalar sumw = 0.0;
+    forAll(pFaces, j){
+      label faceI = pFaces[j];
+      point faceC = faceCs[faceI];
+      
+      vector d = faceC - curP;
+      scalar dist = mag(d);
+      
+      sumw += dist;
+    }
+    
+    sumDistance[i] = sumw;
+  }
+  
+  syncTools::syncPointList( mesh_, meshPoints, sumDistance, plusEqOp<scalar>(), 0.0);
+  syncTools::syncPointList( mesh_, meshPoints, numberNeighb, plusEqOp<scalar>(), 0.0);
+
+  scalarField averDistance( boundaryPoints.size() );
+  
+  forAll(averDistance, i){
+    averDistance[i] = sumDistance[i] / numberNeighb[i];
+  }
+  
+  vectorField displacement( boundaryPoints.size() );
+  
+  forAll(displacement, i){
+    point curP = boundaryPoints[i];
+    const labelList& pFaces = plistFaces[i];
+    
+    vector displ(0,0,0);
+    forAll(pFaces, j){
+      label faceI = pFaces[j];
+      point faceC = faceCs[faceI];
+      
+      vector d = faceC - curP;
+      scalar dist = mag(d);
+      
+      vector aux = d * (1 - averDistance[i] / dist);
+      displ = (magSqr(aux)>=magSqr(displ) ? aux : displ);
+    }
+    
+    displacement[i] = displ;
+  }
+  
+  syncTools::syncPointList( mesh_, meshPoints, displacement, maxMagSqrEqOp<vector>(), vector::zero);
+
+  forAll(displacement, i){
+    displacement[i] *= alpha;
+  }
+  forAll(displacement, i){
+    if( std::find(lcl_wall_list_wallsInletEdges.begin(), lcl_wall_list_wallsInletEdges.end(), i)
+        != lcl_wall_list_wallsInletEdges.end()
+            ||
+        std::find(lcl_wall_list_wallsOutletEdges.begin(), lcl_wall_list_wallsOutletEdges.end(), i)
+        != lcl_wall_list_wallsOutletEdges.end()
+    ){
+      displacement[i] = vector::zero;
+    }
+  }
+  
+  return displacement;
+}
+*/
+
+
+
+
+
+
 vectorField DissolMeshRlx::wallRelaxation(int N){
   vectorField boundaryCopy = mesh_.boundaryMesh()[wallID].localPoints();
   
@@ -173,6 +381,10 @@ vectorField DissolMeshRlx::wallRelaxation(int N){
       }
     }
     
+    //Foam::polyMesh& meshParent = refCast<Foam::polyMesh>(mesh_);
+    const labelList& meshPoints = mesh_.boundaryMesh()[wallID].meshPoints();
+    syncTools::syncPointList( mesh_, meshPoints, boundaryRelax, plusEqOp<vector>(), vector::zero);
+      
     boundaryCopy += boundaryRelax;
   }
   
@@ -339,6 +551,7 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
     maxdZ = max( maxdZ, A.z() );    
   }
 
+  reduce(maxdZ, maxOp<scalar>());
 
   for(std::list<int>::iterator iter  = lcl_wall_list_wallsInletEdges.begin();
                                iter != lcl_wall_list_wallsInletEdges.end();
@@ -697,12 +910,12 @@ void DissolMeshRlx::setUpPairsRlx(){
       }
       else{
         vector posN = mesh1_.points()[segside];// position of a neighbor
-        if( posN.z()-posP.z()>0.01 ){
+        if( posN.z()-posP.z()>0.01){ //  && (posP.x()>-34.9) 
           bouNeighb = segside;
           //break;
         }
-        if( posN.z()-posP.z()<-0.01 ){
-          bouNeighbLow = segside;
+        if( posN.z()-posP.z()<-0.01){  // && (posP.x()>-34.9) 
+            bouNeighbLow = segside;
         }
           
         // only for edge

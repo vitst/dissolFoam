@@ -101,6 +101,7 @@ public:
   // fix edge displacement and calculate inlet displ.
   vectorField calculateInletDisplacement( vectorField& );
 
+  vectorField wallRelaxation1();
   vectorField wallRelaxation(int);
   vectorField wallRelaxation(int, const vectorField&);
 
