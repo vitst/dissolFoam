@@ -114,33 +114,9 @@ int main(int argc, char *argv[])
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
   label inletID = mesh.boundaryMesh().findPatchID("inlet");
   
-  // mesh rlx
-  Foam::Time runTime1
-  (
-      Foam::Time::controlDictName,
-      args.rootPath(),
-      args.caseName(),
-      "system",
-      "constant",
-      !args.optionFound("noFunctionObjects")
-  );
-  
-  Foam::instantList timeDirs = Foam::timeSelector::select0(runTime1, args);
-
-  Foam::fvMesh mesh1
-  (
-    Foam::IOobject
-    (
-      Foam::fvMesh::defaultRegion,
-      runTime1.timeName(),
-      runTime1,
-      Foam::IOobject::MUST_READ
-    )
-  );
-
   Info<< "Setup mesh relaxation class" << endl;
   // reference to the mesh relaxation object
-  DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh, mesh1);
+  DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh);
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
   /*
@@ -260,8 +236,24 @@ int main(int argc, char *argv[])
 
     vectorField pointDispWall = patchInterpolator.faceToPointInterpolate(motionVec);
     
-//  Mesh update 2.2: Inlet displacement
+    //vectorField pointDispWall1 = pointDispWall;
+    
     vectorField& pdw = pointDispWall;
+    mesh_rlx->fixEdgeConcentration(pdw);
+    
+    /*
+    forAll(pointDispWall, i){
+      if( mag( pointDispWall[i] - pointDispWall1[i] )>0 )
+        Pout << ( pointDispWall[i] - pointDispWall1[i] ) 
+              <<  "   " << mesh.boundaryMesh()[wallID].localPoints()[i]
+              << nl;
+    
+    }
+     */
+    
+    //std::exit(0);
+    
+//  Mesh update 2.2: Inlet displacement
     vectorField pointDispInlet = mesh_rlx->calculateInletDisplacement(pdw);
 
 //  Mesh update 4: Update boundary and relax interior mesh
@@ -277,17 +269,17 @@ int main(int argc, char *argv[])
     pointVelocity.boundaryField()[wallID] == zeroWall;
     // ****************************************************************
     
-    
+      //runTime.write();
+      //runTime++;
 //  Mesh update 5: boundary mesh relaxation
     Info<<nl<<"Boundary mesh relaxation"<<nl<<nl;
     for(int i=0; i<100; i++){
-      //vectorField boundaryRelax = mesh_rlx->wallRelaxation(1000);
-      vectorField boundaryRelax = mesh_rlx->wallRelaxation1();
+      vectorField boundaryRelax = mesh_rlx->wallRelaxation();
       pointVelocity.boundaryField()[wallID] == boundaryRelax;
       mesh.update();
       
-      //runTime++;
       //runTime.write();
+      //runTime++;
     }
     // *******************************
 /*    
