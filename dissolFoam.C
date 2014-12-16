@@ -280,8 +280,11 @@ int main(int argc, char *argv[])
     Info<<nl<<"Boundary mesh relaxation"<<nl<<nl;
     Info<<"Wall"<<nl;
     for(int i=0; i<100; i++){
-      vectorField boundaryRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID] );
-      pointVelocity.boundaryField()[wallID] == boundaryRelax;
+      vectorField wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID] );
+      pointVelocity.boundaryField()[wallID] == wallRelax;
+      
+      vectorField inlRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[inletID] );
+      pointVelocity.boundaryField()[inletID] == inlRelax;
       mesh.update();
       
       //runTime.write();

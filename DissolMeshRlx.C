@@ -213,6 +213,7 @@ void DissolMeshRlx::setUpLists(){
     
     if( findIndex(inletToAll, lW) != -1){
       local_wall_WallsInletEdges.append( i );
+      global_WallInletEdges.append( lW );
     }
     
     // create walls-outlet edge list of vertex IDs
@@ -220,6 +221,7 @@ void DissolMeshRlx::setUpLists(){
     //if(iO != allToOutlet.end()){
     if( findIndex(outletToAll, lW) != -1){
       local_wall_WallsOutletEdges.append( i );
+      global_WallOutletEdges.append( lW );
     }
   }
   

@@ -34,7 +34,10 @@ private:
   labelList local_wall_WallsInletEdges;
   labelList local_wall_WallsOutletEdges;
 
-
+  
+  labelList global_WallInletEdges;
+  labelList global_WallOutletEdges;
+  
   
   labelListList inletTriple;
   // map for the extrapolation of the concentration on the edge
@@ -105,35 +108,87 @@ public:
     vector ny(0,1,0);
     vector nz(0,0,1);
 
-    vectorField inletEdgeD( local_wall_WallsInletEdges.size() );
+    vectorField inletPrj( global_WallInletEdges.size() );
     
-    forAll(local_wall_WallsInletEdges, i){
-      inletEdgeD[i] = projectedDisplacement[ local_wall_WallsInletEdges[i] ];
+    forAll(global_WallInletEdges, i){
+      label ind = findIndex( meshPoints, global_WallInletEdges[i]);
+      if( ind!=-1 ){
+        inletPrj[i] = projectedDisplacement[ ind ];
+      }
     }
 
-    vectorField inletPrjY = transform(I - ny*ny, inletEdgeD);
-    vectorField inletPrj = transform(I - nz*nz, inletPrjY);
+    inletPrj = transform(I - ny*ny, inletPrj);
+    inletPrj = transform(I - nz*nz, inletPrj);
 
-    forAll(local_wall_WallsInletEdges, i){
-      projectedDisplacement[ local_wall_WallsInletEdges[i] ] = inletPrj[i];
+    forAll(global_WallInletEdges, i){
+      label ind = findIndex( meshPoints, global_WallInletEdges[i]);
+      if( ind!=-1 ){
+        projectedDisplacement[ ind ] = inletPrj[i];
+      }
     }
 
     // project back outlet
-    vectorField outletEdgeD( local_wall_WallsOutletEdges.size() );
-    forAll(local_wall_WallsOutletEdges, i){
-      outletEdgeD[i] = projectedDisplacement[ local_wall_WallsOutletEdges[i] ];
+    vectorField outletPrj( global_WallOutletEdges.size() );
+    
+    forAll(global_WallOutletEdges, i){
+      label ind = findIndex( meshPoints, global_WallOutletEdges[i]);
+      if( ind!=-1 ){
+        outletPrj[i] = projectedDisplacement[ ind ];
+      }
     }
 
-    vectorField outletPrjY = transform(I - ny*ny, outletEdgeD);
-    vectorField outletPrj = transform(I - nz*nz, outletPrjY);
+    outletPrj = transform(I - ny*ny, outletPrj);
+    outletPrj = transform(I - nz*nz, outletPrj);
 
-    forAll(local_wall_WallsOutletEdges, i){
-      projectedDisplacement[ local_wall_WallsOutletEdges[i] ] = outletPrj[i];
+    forAll(global_WallOutletEdges, i){
+      label ind = findIndex( meshPoints, global_WallOutletEdges[i]);
+      if( ind!=-1 ){
+        projectedDisplacement[ ind ] = outletPrj[i];
+      }
     }
 
     return projectedDisplacement;
   }
   
+/*  
+  template<class Patch>
+  scalarField calc_weights(const Patch& patch_){
+
+    const labelList& meshPoints = patch_.meshPoints();
+
+    const pointField& boundaryPoints = patch_.localPoints();
+    const labelListList& plistFaces = patch_.pointFaces();
+    const pointField& faceCs = patch_.faceCentres();
+
+    vectorField displacement( boundaryPoints.size() );
+    scalarField numberFaces( boundaryPoints.size() );
+
+    forAll(boundaryPoints, i){
+      point curP = boundaryPoints[i];
+      const labelList& pFaces = plistFaces[i];
+
+      numberFaces[i] = plistFaces[i].size();
+
+      vector sumw(0,0,0);
+      forAll(pFaces, j){
+        label faceI = pFaces[j];
+        point faceC = faceCs[faceI];
+
+        vector d = faceC - curP;
+        sumw += d;
+      }
+      // sum of all distances to face centres
+      displacement[i] = sumw;
+    }
+
+    syncTools::syncPointList( mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
+    syncTools::syncPointList( mesh_, meshPoints, numberFaces, plusEqOp<scalar>(), 0.0);
+
+    forAll(displacement, i)  displacement[i] /= numberFaces[i];
+
+    
+  }
+  */
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
