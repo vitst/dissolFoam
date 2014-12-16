@@ -10,11 +10,9 @@
 #include "Pstream.H"
 
 #include "pyramidPointFaceRef.H"
-#include "syncTools.H"
 
 #include "transformField.H"
 #include "symmTransformField.H"
-#include "primitivePatchInterpolationSync.H"
 
 
 // mesh1 is the mesh at time 0
@@ -45,90 +43,6 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
 }
 
 // ++
-vectorField DissolMeshRlx::wallRelaxation(){
-  const labelList& meshPoints = mesh_.boundaryMesh()[wallID].meshPoints();
-
-  const pointField& boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();
-  const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
-  const pointField& faceCs = mesh_.boundaryMesh()[wallID].faceCentres();
-  
-  vectorField displacement( boundaryPoints.size() );
-  scalarField numberFaces( boundaryPoints.size() );
-  
-  forAll(boundaryPoints, i){
-    point curP = boundaryPoints[i];
-    const labelList& pFaces = plistFaces[i];
-    
-    numberFaces[i] = plistFaces[i].size();
-    
-    vector sumw(0,0,0);
-    forAll(pFaces, j){
-      label faceI = pFaces[j];
-      point faceC = faceCs[faceI];
-      
-      vector d = faceC - curP;
-      sumw += d;
-    }
-    // sum of all distances to face centres
-    displacement[i] = sumw;
-  }
-  
-  syncTools::syncPointList( mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
-  syncTools::syncPointList( mesh_, meshPoints, numberFaces, plusEqOp<scalar>(), 0.0);
-  
-  /*
-  forAll(numberFaces, i){
-    if(numberFaces[i]>2 && numberFaces[i]<4){
-      Pout << numberFaces[i] << nl;
-    }
-  }
-  std::exit(0);
-   */
-
-  forAll(displacement, i){
-    displacement[i] /= numberFaces[i];
-  }
-  
-  // getting correct point normal field
-  vectorField fNorm = mesh_.boundaryMesh()[wallID].faceNormals();
-  primitivePatchInterpolationSync patchInterpolator( mesh_.boundaryMesh()[wallID], mesh_ );
-  vectorField pointNorm = patchInterpolator.faceToPointInterpolate(fNorm);
-  
-  vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
-
-
-  // project back inlet
-  // TODO read from the dictionary
-  vector ny(0,1,0);
-  vector nz(0,0,1);
-  
-  vectorField inletEdgeD( local_wall_WallsInletEdges.size() );
-  forAll(local_wall_WallsInletEdges, i){
-    inletEdgeD[i] = projectedDisplacement[ local_wall_WallsInletEdges[i] ];
-  }
-  
-  vectorField inletPrjY = transform(I - ny*ny, inletEdgeD);
-  vectorField inletPrj = transform(I - nz*nz, inletPrjY);
-  
-  forAll(local_wall_WallsInletEdges, i){
-    projectedDisplacement[ local_wall_WallsInletEdges[i] ] = inletPrj[i];
-  }
-  
-  // project back outlet
-  vectorField outletEdgeD( local_wall_WallsOutletEdges.size() );
-  forAll(local_wall_WallsOutletEdges, i){
-    outletEdgeD[i] = projectedDisplacement[ local_wall_WallsOutletEdges[i] ];
-  }
-  
-  vectorField outletPrjY = transform(I - ny*ny, outletEdgeD);
-  vectorField outletPrj = transform(I - nz*nz, outletPrjY);
-
-  forAll(local_wall_WallsOutletEdges, i){
-    projectedDisplacement[ local_wall_WallsOutletEdges[i] ] = outletPrj[i];
-  }
-  
-  return projectedDisplacement;
-}
 
 
 
@@ -157,6 +71,17 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
   return pointDispInlet;
 }
 
+void DissolMeshRlx::doInletDisplacement(vectorField& inletDispl){
+    const pointField& inlPoints = mesh_.boundaryMesh()[inletID].localPoints();
+    const labelList& inletToAll = mesh_.boundaryMesh()[inletID].meshPoints();
+    forAll(inletDispl, i){
+      if( findIndex(wallsToAll, inletToAll[i]) != -1 ){
+        inletDispl[i] = vector::zero;
+        //Pout << inlPoints[ i ] << nl;
+      }
+    }
+    //mesh_.movePoints( newPoints );
+}
 
 // ++
 void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){

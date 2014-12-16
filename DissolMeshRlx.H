@@ -12,6 +12,10 @@
 #include <list>
 #include <map>
 
+#include "syncTools.H"
+#include "primitivePatchInterpolationSync.H"
+
+
 class DissolMeshRlx{
 
 private:
@@ -54,8 +58,82 @@ public:
   
   // fix edge displacement and calculate inlet displ.
   vectorField calculateInletDisplacement( vectorField& );
+  void doInletDisplacement(vectorField&);
+  
+  template<class Patch>
+  vectorField wallRelaxation(const Patch& patch_){
+    const labelList& meshPoints = patch_.meshPoints();
 
-  vectorField wallRelaxation();
+    const pointField& boundaryPoints = patch_.localPoints();
+    const labelListList& plistFaces = patch_.pointFaces();
+    const pointField& faceCs = patch_.faceCentres();
+
+    vectorField displacement( boundaryPoints.size() );
+    scalarField numberFaces( boundaryPoints.size() );
+
+    forAll(boundaryPoints, i){
+      point curP = boundaryPoints[i];
+      const labelList& pFaces = plistFaces[i];
+
+      numberFaces[i] = plistFaces[i].size();
+
+      vector sumw(0,0,0);
+      forAll(pFaces, j){
+        label faceI = pFaces[j];
+        point faceC = faceCs[faceI];
+
+        vector d = faceC - curP;
+        sumw += d;
+      }
+      // sum of all distances to face centres
+      displacement[i] = sumw;
+    }
+
+    syncTools::syncPointList( mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
+    syncTools::syncPointList( mesh_, meshPoints, numberFaces, plusEqOp<scalar>(), 0.0);
+
+    forAll(displacement, i)  displacement[i] /= numberFaces[i];
+
+    // getting correct point normal field
+    vectorField fNorm = patch_.faceNormals();
+    primitivePatchInterpolationSync patchInterpolator( patch_, mesh_ );
+    vectorField pointNorm = patchInterpolator.faceToPointInterpolate(fNorm);
+
+    vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
+
+    // fixing edges
+    vector ny(0,1,0);
+    vector nz(0,0,1);
+
+    vectorField inletEdgeD( local_wall_WallsInletEdges.size() );
+    
+    forAll(local_wall_WallsInletEdges, i){
+      inletEdgeD[i] = projectedDisplacement[ local_wall_WallsInletEdges[i] ];
+    }
+
+    vectorField inletPrjY = transform(I - ny*ny, inletEdgeD);
+    vectorField inletPrj = transform(I - nz*nz, inletPrjY);
+
+    forAll(local_wall_WallsInletEdges, i){
+      projectedDisplacement[ local_wall_WallsInletEdges[i] ] = inletPrj[i];
+    }
+
+    // project back outlet
+    vectorField outletEdgeD( local_wall_WallsOutletEdges.size() );
+    forAll(local_wall_WallsOutletEdges, i){
+      outletEdgeD[i] = projectedDisplacement[ local_wall_WallsOutletEdges[i] ];
+    }
+
+    vectorField outletPrjY = transform(I - ny*ny, outletEdgeD);
+    vectorField outletPrj = transform(I - nz*nz, outletPrjY);
+
+    forAll(local_wall_WallsOutletEdges, i){
+      projectedDisplacement[ local_wall_WallsOutletEdges[i] ] = outletPrj[i];
+    }
+
+    return projectedDisplacement;
+  }
+  
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 

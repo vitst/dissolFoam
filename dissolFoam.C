@@ -99,14 +99,12 @@ int main(int argc, char *argv[])
     )
   );
 
-/*
-  word motionType
+  bool fixInletConcentration
   (
-    dissolProperties.lookup("motionBasedOn")
+    readBool( dissolProperties.lookup("fixInletConcentration") )
   );
   
-  Info << "The "<<motionType<< " field is used to calculate the walls motion"<<nl;
- */
+  Info << "dissolFoamDict, fixInletConcentration:  " << fixInletConcentration <<nl;
   
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
@@ -236,22 +234,12 @@ int main(int argc, char *argv[])
 
     vectorField pointDispWall = patchInterpolator.faceToPointInterpolate(motionVec);
     
-    //vectorField pointDispWall1 = pointDispWall;
-    
     vectorField& pdw = pointDispWall;
-    mesh_rlx->fixEdgeConcentration(pdw);
     
-    /*
-    forAll(pointDispWall, i){
-      if( mag( pointDispWall[i] - pointDispWall1[i] )>0 )
-        Pout << ( pointDispWall[i] - pointDispWall1[i] ) 
-              <<  "   " << mesh.boundaryMesh()[wallID].localPoints()[i]
-              << nl;
-    
+    if(fixInletConcentration){
+      Info << "Fix concentration on the edge between walls and inlet"<< nl;
+      mesh_rlx->fixEdgeConcentration(pdw);
     }
-     */
-    
-    //std::exit(0);
     
 //  Mesh update 2.2: Inlet displacement
     vectorField pointDispInlet = mesh_rlx->calculateInletDisplacement(pdw);
@@ -261,7 +249,24 @@ int main(int argc, char *argv[])
     pointVelocity.boundaryField()[wallID] == pointDispWall;
     pointVelocity.boundaryField()[inletID] == pointDispInlet;
     mesh.update();
+/*    
+    runTime.write();
+    runTime++;
 
+    vectorField& pdd = pointDispInlet;
+    mesh_rlx->doInletDisplacement(pdd);
+    
+    //std::exit(0);
+    pointField newPoints = mesh.points();
+    const labelList& inletToAll = mesh.boundaryMesh()[inletID].meshPoints();
+    forAll(pointDispInlet, i){
+      newPoints[ inletToAll[i] ] += pointDispInlet[i] * runTime.deltaTValue();
+    }
+    mesh.movePoints( newPoints );
+    
+    runTime.write();
+    runTime++;
+    */
     // ****************************************************************
     vectorField zeroInlet( pointDispInlet.size(), vector::zero );
     vectorField zeroWall( pointDispWall.size(), vector::zero );
@@ -273,14 +278,25 @@ int main(int argc, char *argv[])
       //runTime++;
 //  Mesh update 5: boundary mesh relaxation
     Info<<nl<<"Boundary mesh relaxation"<<nl<<nl;
+    Info<<"Wall"<<nl;
     for(int i=0; i<100; i++){
-      vectorField boundaryRelax = mesh_rlx->wallRelaxation();
+      vectorField boundaryRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID] );
       pointVelocity.boundaryField()[wallID] == boundaryRelax;
       mesh.update();
       
       //runTime.write();
       //runTime++;
     }
+    
+    /*
+    Info<<"Inlet"<<nl;
+    for(int i=0; i<100; i++){
+      vectorField boundaryRelax = mesh_rlx->wallRelaxation();
+      pointVelocity.boundaryField()[wallID] == boundaryRelax;
+      mesh.update();
+    }
+    */
+    
     // *******************************
 /*    
     // Internal points relaxation
