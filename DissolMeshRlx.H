@@ -63,8 +63,83 @@ public:
   vectorField calculateInletDisplacement( vectorField& );
   void doInletDisplacement(vectorField&);
   
+
+/*  
   template<class Patch>
-  vectorField wallRelaxation(const Patch& patch_){
+  vectorField inletRlx(const Patch& patch_, const vectorField& displ_){
+    vectorField displ = displ_;
+    vector nn(0,0,1);
+    //displ = transform(I - nn*nn, displ);
+    
+    const labelList& meshPoints = patch_.meshPoints();
+
+    const pointField& pCoord = patch_.localPoints();
+    //const labelListList& plistFaces = patch_.pointFaces();
+    const pointField& fCoord = patch_.faceCentres();
+    
+    vectorField pointDispl( pCoord.size() );
+    vectorField faceDispl( fCoord.size() );
+    
+    primitivePatchInterpolationSync patchInterpolator( patch_, mesh_ );
+    
+    for(int iii=0; iii<10; iii++){
+      
+      forAll(global_WallInletEdges, i){
+        label ind = findIndex( meshPoints, global_WallInletEdges[i]);
+        if( ind!=-1 ){
+          pointDispl[ind] = displ[ local_wall_WallsInletEdges[i] ];
+        }
+      }
+      pointDispl = transform(I - nn*nn, pointDispl);
+      
+      faceDispl = patchInterpolator.pointToFaceInterpolate( pointDispl );
+      //vectorField pointDispl1 = patchInterpolator.faceToPointInterpolate( faceDispl );
+      pointDispl = patchInterpolator.faceToPointInterpolate( faceDispl );
+      
+    }
+    return pointDispl;
+  }
+ */
+  
+  template<class Patch>
+  vectorField inletRlx(const Patch& patch_, const vectorField& displ_){
+    vectorField displ = displ_;
+    vector nn(0,0,1);
+    //displ = transform(I - nn*nn, displ);
+    
+    const labelList& meshPoints = patch_.meshPoints();
+
+    const pointField& pCoord = patch_.localPoints();
+    //const labelListList& plistFaces = patch_.pointFaces();
+    const pointField& fCoord = patch_.faceCentres();
+    
+    vectorField pointDispl( pCoord.size() );
+    vectorField faceDispl( fCoord.size() );
+    
+    primitivePatchInterpolationSync patchInterpolator( patch_, mesh_ );
+    
+    for(int iii=0; iii<10; iii++){
+      
+      forAll(global_WallInletEdges, i){
+        label ind = findIndex( meshPoints, global_WallInletEdges[i]);
+        if( ind!=-1 ){
+          pointDispl[ind] = displ[ local_wall_WallsInletEdges[i] ];
+        }
+      }
+      pointDispl = transform(I - nn*nn, pointDispl);
+      
+      faceDispl = patchInterpolator.pointToFaceInterpolate( pointDispl );
+      //vectorField pointDispl1 = patchInterpolator.faceToPointInterpolate( faceDispl );
+      pointDispl = patchInterpolator.faceToPointInterpolate( faceDispl );
+      
+    }
+    return pointDispl;
+  }
+  
+
+  
+  template<class Patch>
+  vectorField wallRelaxation(const Patch& patch_, const scalarListList& weights){
     const labelList& meshPoints = patch_.meshPoints();
 
     const pointField& boundaryPoints = patch_.localPoints();
@@ -80,23 +155,38 @@ public:
 
       numberFaces[i] = plistFaces[i].size();
 
+      scalar ss =0;
       vector sumw(0,0,0);
       forAll(pFaces, j){
         label faceI = pFaces[j];
         point faceC = faceCs[faceI];
+        //scalarList& pw = weights[i];
 
         vector d = faceC - curP;
-        sumw += d;
+        sumw += d * weights[i][j];
+        ss += weights[i][j];
+        
+/*
+        if( curP.x()>23.5 && curP.x()<24.5 && curP.y()>.4 ){
+          Pout << curP << "   " << weights[i][j] << "   " << faceC << nl;
+        }
+ */
+        
       }
+      //Pout << curP << "   " << weights[i] << nl;
       // sum of all distances to face centres
       displacement[i] = sumw;
+      //numberFaces[i] = ss;
     }
 
     syncTools::syncPointList( mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
     syncTools::syncPointList( mesh_, meshPoints, numberFaces, plusEqOp<scalar>(), 0.0);
 
-    forAll(displacement, i)  displacement[i] /= numberFaces[i];
-
+    //Pout << numberFaces << nl;
+    //std::exit(0);
+    
+    //forAll(displacement, i)  displacement[i] /= numberFaces[i];
+    
     // getting correct point normal field
     vectorField fNorm = patch_.faceNormals();
     primitivePatchInterpolationSync patchInterpolator( patch_, mesh_ );
@@ -150,9 +240,8 @@ public:
     return projectedDisplacement;
   }
   
-/*  
   template<class Patch>
-  scalarField calc_weights(const Patch& patch_){
+  scalarListList calc_weights(const Patch& patch_){
 
     const labelList& meshPoints = patch_.meshPoints();
 
@@ -160,35 +249,40 @@ public:
     const labelListList& plistFaces = patch_.pointFaces();
     const pointField& faceCs = patch_.faceCentres();
 
-    vectorField displacement( boundaryPoints.size() );
-    scalarField numberFaces( boundaryPoints.size() );
+    scalarListList weights( boundaryPoints.size() );
+    scalarField sumWeights( boundaryPoints.size() );
 
     forAll(boundaryPoints, i){
       point curP = boundaryPoints[i];
       const labelList& pFaces = plistFaces[i];
 
-      numberFaces[i] = plistFaces[i].size();
-
-      vector sumw(0,0,0);
+      scalarList& pw = weights[i];
+      pw.setSize(pFaces.size());
+      
+      scalar sumw = 0.0;
       forAll(pFaces, j){
         label faceI = pFaces[j];
         point faceC = faceCs[faceI];
 
         vector d = faceC - curP;
-        sumw += d;
+        pw[j] = 1/mag(d);
+        sumw += pw[j];
       }
       // sum of all distances to face centres
-      displacement[i] = sumw;
+      sumWeights[i] = sumw;
     }
 
-    syncTools::syncPointList( mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
-    syncTools::syncPointList( mesh_, meshPoints, numberFaces, plusEqOp<scalar>(), 0.0);
+    syncTools::syncPointList( mesh_, meshPoints, sumWeights, plusEqOp<scalar>(), 0.0);
 
-    forAll(displacement, i)  displacement[i] /= numberFaces[i];
+    forAll(weights, i){
+      scalarList& pw = weights[i];
+      forAll(pw, j){
+        pw[j] /= sumWeights[i];
+      }
+    }
 
-    
+    return weights;
   }
-  */
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
