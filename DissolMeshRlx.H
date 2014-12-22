@@ -39,6 +39,12 @@ private:
   labelList global_WallOutletEdges;
   
   
+  
+  labelList local_inlet_WallsInletEdges;
+  labelList scaleList;
+  
+  
+  
   labelListList inletTriple;
   // map for the extrapolation of the concentration on the edge
   // it fixes inlet boundary condition inconsistance
@@ -104,7 +110,8 @@ public:
   template<class Patch>
   vectorField inletRlx(const Patch& patch_, const vectorField& displ_){
     vectorField displ = displ_;
-    vector nn(0,0,1);
+    vector nz(0,0,1);
+    vector nx(1,0,0);
     //displ = transform(I - nn*nn, displ);
     
     const labelList& meshPoints = patch_.meshPoints();
@@ -113,26 +120,32 @@ public:
     //const labelListList& plistFaces = patch_.pointFaces();
     const pointField& fCoord = patch_.faceCentres();
     
-    vectorField pointDispl( pCoord.size() );
+    //vectorField pointDispl( pCoord.size() );
+    vectorField pointDispl = pCoord;
     vectorField faceDispl( fCoord.size() );
     
-    primitivePatchInterpolationSync patchInterpolator( patch_, mesh_ );
     
-    for(int iii=0; iii<10; iii++){
-      
-      forAll(global_WallInletEdges, i){
-        label ind = findIndex( meshPoints, global_WallInletEdges[i]);
-        if( ind!=-1 ){
-          pointDispl[ind] = displ[ local_wall_WallsInletEdges[i] ];
-        }
+    scalarField minScale( local_wall_WallsInletEdges.size() );
+    
+    forAll(global_WallInletEdges, i){
+      label ind = findIndex( meshPoints, global_WallInletEdges[i]);
+      if( ind!=-1 ){
+        //pointDispl[ind] = displ[ local_wall_WallsInletEdges[i] ];
+        //Pout<< pointDispl[ind].y()/pCoord[ind].y() <<nl;
+        minScale[i] = displ[ local_wall_WallsInletEdges[i] ].y()/pCoord[ind].y();
       }
-      pointDispl = transform(I - nn*nn, pointDispl);
-      
-      faceDispl = patchInterpolator.pointToFaceInterpolate( pointDispl );
-      //vectorField pointDispl1 = patchInterpolator.faceToPointInterpolate( faceDispl );
-      pointDispl = patchInterpolator.faceToPointInterpolate( faceDispl );
-      
     }
+    pointDispl = transform(I - nz*nz, pointDispl);
+    pointDispl = transform(I - nx*nx, pointDispl);
+    
+    forAll(pointDispl, i){
+      if( scaleList[i]!=-1 ){
+        pointDispl[i].y() *= minScale[ scaleList[i] ];
+      }
+    }
+    
+    
+    
     return pointDispl;
   }
   

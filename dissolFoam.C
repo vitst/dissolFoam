@@ -103,6 +103,9 @@ int main(int argc, char *argv[])
   (
     readBool( dissolProperties.lookup("fixInletConcentration") )
   );
+
+  //label rlxIter( label(dissolProperties.lookup("relaxationIter")) );
+  int rlxIter( dissolProperties.lookupOrDefault<int>("relaxationIter", 1) );
   
   Info << "dissolFoamDict, fixInletConcentration:  " << fixInletConcentration <<nl;
   
@@ -248,7 +251,7 @@ int main(int argc, char *argv[])
 //  Mesh update 2.2: Inlet displacement
     vectorField pointDispInlet = mesh_rlx->calculateInletDisplacement(pdw);
 
-    pointDispInlet += mesh_rlx->inletRlx(mesh.boundaryMesh()[inletID], pdw);
+    //pointDispInlet += mesh_rlx->inletRlx(mesh.boundaryMesh()[inletID], pdw);
       
 //  Mesh update 4: Update boundary and relax interior mesh
     Info<< nl << "Update boundary and relax interior mesh" <<nl;
@@ -256,9 +259,7 @@ int main(int argc, char *argv[])
     pointVelocity.boundaryField()[inletID] == pointDispInlet;
     mesh.update();
     
-    
 /*    
-
     vectorField& pdd = pointDispInlet;
     mesh_rlx->doInletDisplacement(pdd);
     
@@ -280,32 +281,34 @@ int main(int argc, char *argv[])
     pointVelocity.boundaryField()[wallID] == zeroWall;
     // ****************************************************************
     
-      //runTime.write();
-      //runTime++;
 //  Mesh update 5: boundary mesh relaxation
     Info<<nl<<"Boundary mesh relaxation"<<nl<<nl;
     Info<<"Wall"<<nl;
-    for(int i=0; i<10; i++){
-      vectorField wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID], wallWeights );
-      //pointVelocity.boundaryField()[wallID] == 10.0 * wallRelax;
+    for(int i=0; i<rlxIter; i++){
+      Info<< "rlx iter "<< i << nl;
+      //vectorField wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID], wallWeights );
+      //pointVelocity.boundaryField()[wallID] == 100.0 * wallRelax;
       
-      //vectorField inlRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[inletID], inlWeights );
-      //pointVelocity.boundaryField()[inletID] == 10.0 * inlRelax;
+      vectorField inlRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[inletID], inlWeights );
+      pointVelocity.boundaryField()[inletID] == inlRelax / runTime.deltaTValue();
       
+      /*
       pointField newPoints = mesh.points();
       const labelList& wallToAll = mesh.boundaryMesh()[wallID].meshPoints();
       forAll(wallRelax, j){
         newPoints[ wallToAll[j] ] += wallRelax[j];
       }
       mesh.movePoints( newPoints );
+       */
       
       
-      //mesh.update();
+      mesh.update();
       
-      //runTime.write();
-      //runTime++;
+      runTime.write();
+      runTime++;
     }
-    mesh.update();
+    //mesh.update();
+    std::exit(0);
     
     /*
     scalarListList inlWeights11 = mesh_rlx->calc_weights( mesh.boundaryMesh()[inletID] );
@@ -317,7 +320,6 @@ int main(int argc, char *argv[])
         Pout << curP << "  " << inlWeights[i] << "  " << inlWeights11[i]<< nl;
       }
     }
-    std::exit(0);
     */
     /*
     Info<<"Inlet"<<nl;

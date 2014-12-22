@@ -211,9 +211,11 @@ void DissolMeshRlx::setUpLists(){
   forAll(wallsToAll, i){
     label lW = wallsToAll[i];
     
-    if( findIndex(inletToAll, lW) != -1){
+    label inlind = findIndex(inletToAll, lW);
+    if( inlind != -1){
       local_wall_WallsInletEdges.append( i );
       global_WallInletEdges.append( lW );
+      local_inlet_WallsInletEdges.append( inlind );
     }
     
     // create walls-outlet edge list of vertex IDs
@@ -224,6 +226,35 @@ void DissolMeshRlx::setUpLists(){
       global_WallOutletEdges.append( lW );
     }
   }
+  
+  scaleList.setSize( mesh_.boundaryMesh()[inletID].nPoints(), -1 );
+  const pointField& pCoord = mesh_.boundaryMesh()[inletID].localPoints();
+  
+  forAll(scaleList, i){
+    point pp = pCoord[ i ];
+    forAll(local_inlet_WallsInletEdges, j){
+      if( std::abs(pp.x()-pCoord[local_inlet_WallsInletEdges[j]].x())<0.1 
+              &&  
+          pp.y() * pCoord[local_inlet_WallsInletEdges[j]].y()>0
+        ){
+        scaleList[i] = j;
+/*        
+        Pout<< scaleList[i] << "  " 
+                << pp<< "   " 
+                << pCoord[local_inlet_WallsInletEdges[j]] << nl;
+ */
+        break;
+      }
+    }
+  }
+/*  
+  forAll(scaleList, i){
+    Pout<< scaleList[i]<< "  "<< pCoord[ i ] << nl;
+  }
+  
+  
+  std::exit(0);
+*/    
   
 }
 
