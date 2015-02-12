@@ -71,16 +71,42 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
   return pointDispInlet;
 }
 
-void DissolMeshRlx::doInletDisplacement(vectorField& inletDispl){
-    const pointField& inlPoints = mesh_.boundaryMesh()[inletID].localPoints();
-    const labelList& inletToAll = mesh_.boundaryMesh()[inletID].meshPoints();
-    forAll(inletDispl, i){
-      if( findIndex(wallsToAll, inletToAll[i]) != -1 ){
-        inletDispl[i] = vector::zero;
-        //Pout << inlPoints[ i ] << nl;
-      }
-    }
-    //mesh_.movePoints( newPoints );
+vectorField DissolMeshRlx::calculateOutletDisplacement(vectorField& wallDispl){
+
+  scalar maxdZ = 0;
+  forAll(local_wall_WallsOutletEdges, i){
+    vector A = wallDispl[ local_wall_WallsOutletEdges[i] ];
+    maxdZ = max( maxdZ, A.z() );    
+  }
+
+  reduce(maxdZ, maxOp<scalar>());
+
+  forAll(local_wall_WallsOutletEdges, i){
+    vector A = wallDispl[ local_wall_WallsOutletEdges[i] ];
+    vector dz(0.0, 0.0, maxdZ - A.z());
+          
+    wallDispl[ local_wall_WallsOutletEdges[i] ] += dz;
+  }
+
+  vectorField pointDispOutlet( mesh_.boundaryMesh()[outletID].localPoints().size(), vector::zero );
+      
+  pointDispOutlet.replace( vector::Z, maxdZ);
+
+  return pointDispOutlet;
+}
+
+
+
+pointField DissolMeshRlx::doInletDisplacement(const vectorField& inletDispl){
+  pointField newPoints = mesh_.points();
+  forAll(inletDispl, i){
+    label indx = inletToAll[i];
+    newPoints[indx] += inletDispl[i];
+  }
+  //const pointField& nP = newPoints;
+  
+  //mesh1.movePoints( newPoints );
+  return newPoints;
 }
 
 // ++
@@ -238,24 +264,26 @@ void DissolMeshRlx::setUpLists(){
           pp.y() * pCoord[local_inlet_WallsInletEdges[j]].y()>0
         ){
         scaleList[i] = j;
-/*        
-        Pout<< scaleList[i] << "  " 
-                << pp<< "   " 
-                << pCoord[local_inlet_WallsInletEdges[j]] << nl;
- */
         break;
       }
     }
   }
-/*  
-  forAll(scaleList, i){
-    Pout<< scaleList[i]<< "  "<< pCoord[ i ] << nl;
+  
+  scaleListOutlet.setSize( mesh_.boundaryMesh()[outletID].nPoints(), -1 );
+  const pointField& pCoordOut = mesh_.boundaryMesh()[outletID].localPoints();
+  
+  forAll(scaleListOutlet, i){
+    point pp = pCoordOut[ i ];
+    forAll(local_outlet_WallsOutletEdges, j){
+      if( std::abs(pp.x()-pCoordOut[local_outlet_WallsOutletEdges[j]].x())<0.1 
+              &&  
+          pp.y() * pCoord[local_outlet_WallsOutletEdges[j]].y()>0
+        ){
+        scaleListOutlet[i] = j;
+        break;
+      }
+    }
   }
-  
-  
-  std::exit(0);
-*/    
-  
 }
 
 float DissolMeshRlx::get_version(){
