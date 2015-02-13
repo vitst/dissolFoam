@@ -109,6 +109,18 @@ pointField DissolMeshRlx::doInletDisplacement(const vectorField& inletDispl){
   return newPoints;
 }
 
+pointField DissolMeshRlx::doWallDisplacement(const vectorField& wallDispl){
+  pointField newPoints = mesh_.points();
+  forAll(wallDispl, i){
+    label indx = wallsToAll[i];
+    newPoints[indx] += wallDispl[i];
+  }
+  //const pointField& nP = newPoints;
+  
+  //mesh1.movePoints( newPoints );
+  return newPoints;
+}
+
 // ++
 void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){
   const pointField& boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();

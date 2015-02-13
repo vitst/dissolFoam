@@ -264,11 +264,14 @@ int main(int argc, char *argv[])
       
 //  Mesh update 4: Update boundary and relax interior mesh
     Info<< nl << "Update boundary and relax interior mesh" <<nl;
-    pointVelocity.boundaryField()[wallID] == pointDispWall;
-    pointVelocity.boundaryField()[inletID] == pointDispInlet;
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!    
+    //pointVelocity.boundaryField()[wallID] == pointDispWall;
+    //pointVelocity.boundaryField()[inletID] == pointDispInlet;
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!    
+    
     //pointVelocity.boundaryField()[outletID] == pointDispOutlet;
     
-    mesh.update();
+    //mesh.update();
     
     // ****************************************************************
     //vectorField zeroOutlet( pointDispOutlet.size(), vector::zero );
@@ -281,7 +284,10 @@ int main(int argc, char *argv[])
     
 //  Mesh update 5: boundary mesh relaxation
     
-    scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
+    Info<<nl<<"Calculating new grading...."<< nl;
+            
+    //scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
+    scalar Gz = 1.0;
     scalar lambdaZ = 1/static_cast<double>(Nz) * std::log( Gz );
     
     scalarListList wallWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[wallID], lambdaZ, 3);
@@ -300,36 +306,55 @@ int main(int argc, char *argv[])
     scalar displ_tolInlet = 1.0;
     scalar displ_tol = 1.0;
     int i = 0;
-    while(displ_tol > rlxTol){
-      vectorField wallRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[wallID], wW, rlxRuns, mesh);
+    
+    pointField savedPointsAll = mesh.points();
+    pointField saveWallPoints = mesh.boundaryMesh()[wallID].localPoints();
+    pointField saveInletPoints = mesh.boundaryMesh()[inletID].localPoints();
+    
+    
+    const vectorField& wR = pointDispWall;
+    pointField mpW = mesh_rlx->doWallDisplacement(wR * runTime.deltaTValue() );
+    mesh.movePoints( mpW);
+    
+    
+    const vectorField& iR = pointDispInlet;
+    pointField mpI = mesh_rlx->doInletDisplacement(iR * runTime.deltaTValue());
+    mesh.movePoints( mpI );
+    
+    runTime.write();
+    runTime++;
+    
+    //while(displ_tol > rlxTol){
+    {
+      Info<<"Relaxing wall..."<<nl;
+      vectorField wallRelax = mesh_rlx->wallRelaxation3( mesh.boundaryMesh()[wallID], wW, rlxRuns, mesh);
       
+      Info<<"Relaxing inlet..."<<nl;
+      vectorField inlRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[inletID], iW, rlxRuns*3, mesh);
+
       displ_tolWall = max( mag(wallRelax) );
       reduce(displ_tolWall, maxOp<scalar>());
-      
-      wallRelax /= runTime.deltaTValue();
-      pointVelocity.boundaryField()[wallID] == wallRelax;
-      
-      vectorField inlRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[inletID], iW, rlxRuns, mesh);
-      //const vectorField& iR = inlRelax;
-      //pointField mp = mesh_rlx->doInletDisplacement(iR, mesh);
-      //mesh.movePoints( mp );
-      
       displ_tolInlet = max( mag(inlRelax) );
       reduce(displ_tolWall, maxOp<scalar>());
-      
-      inlRelax /= runTime.deltaTValue();
-      pointVelocity.boundaryField()[inletID] == inlRelax;
-      
       displ_tol = max(displ_tolWall, displ_tolInlet);
       reduce(displ_tol, maxOp<scalar>());
+      
+      mesh.movePoints( savedPointsAll );
+      
+      wallRelax /= runTime.deltaTValue();
+      pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall;
+      
+      inlRelax /= runTime.deltaTValue();
+      pointVelocity.boundaryField()[inletID] == inlRelax + pointDispInlet;
       
       i+=1;
       Info<< "rlx iter "<< i << "  tolerance: " << displ_tol<< nl;
       
       mesh.update();
       
-      //runTime.write();
-      //runTime++;
+      runTime.write();
+      runTime++;
+      std::exit(0);
     }
     Info<< "Displacement converged. Tolerance: " << displ_tol<< nl;
     
