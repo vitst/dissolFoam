@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
     //while(displ_tol > rlxTol){
     {
       Info<<"Relaxing wall..."<<nl;
-      vectorField wallRelax = mesh_rlx->wallRelaxation3( mesh.boundaryMesh()[wallID], wW, rlxRuns, mesh);
+      vectorField wallRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[wallID], wW, rlxRuns, mesh);
       
       Info<<"Relaxing inlet..."<<nl;
       vectorField inlRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[inletID], iW, rlxRuns*3, mesh);
