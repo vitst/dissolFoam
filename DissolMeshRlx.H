@@ -545,52 +545,60 @@ public:
   
   
   template<class Patch>
-  vectorField wallRelaxation2(const Patch& patch_, const scalarListList& weights, int N, dynamicFvMesh& mesh1){
-    pointField savePoints = mesh_.points();
+  vectorField wallRelaxation2(Patch& patch_, const scalarListList& weights, dynamicFvMesh& mesh1){
     pointField saveBoundaryPoints = patch_.localPoints();
+
+    const List<face>& llf = patch_.localFaces();
+    const labelList& meshPoints = patch_.meshPoints();
+    const labelListList& plistFaces = patch_.pointFaces();
+
+    //vectorField nfCsC = faceNormals(saveBoundaryPoints, llf);
     
-    //vectorField total_displacement( boundaryPoints.size(), vector::zero );
+    pointField boundaryPoints = patch_.localPoints();
+    int N = boundaryPoints.size();
     
-    //for(int iter=0; iter<N; iter++ ){
     scalar displ_tol = 1.0;
     int itt = 0;
-    double Norm0 = 1.0;
+    scalar Norm0 = 1.0;
     while(displ_tol > 0.01){
       
-      const labelList& meshPoints = patch_.meshPoints();
-      const labelListList& plistFaces = patch_.pointFaces();
-      pointField boundaryPoints = patch_.localPoints();
-      pointField faceCs = patch_.faceCentres();
+      // calculate current face centers
+      pointField faceCs = faceCentres(boundaryPoints, llf);
+      //pointField faceCs = patch_.faceCentres();
 
-      vectorField displacement( boundaryPoints.size() );
+      // create a displacement field for points
+      vectorField displacement(N, vector::zero);
     
       forAll(boundaryPoints, i){
-        point curP = boundaryPoints[i];
+        point& curP = boundaryPoints[i];
         const labelList& pFaces = plistFaces[i];
         const scalarList& pw = weights[i];
 
-        vector sumw(0,0,0);
         forAll(pFaces, j){
           label faceI = pFaces[j];
-          point faceC = faceCs[faceI];
+          point& faceC = faceCs[faceI];
 
           vector d = faceC - curP;
           
-          sumw += d * pw[j];
+          displacement[i] += d * pw[j];
         }
-        // sum of all distances to face centres
-        displacement[i] = sumw;
       }
 
-      syncTools::syncPointList( mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
+      // synchronizing over the cyclic and processor boundaries
+      syncTools::syncPointList(mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
 
       // getting correct point normal field
-      vectorField fNorm = patch_.faceNormals();
-      primitivePatchInterpolationSync patchInterpolator( patch_, mesh_ );
-      vectorField pointNorm = patchInterpolator.faceToPointInterpolate(fNorm);
+      vectorField faceNs = faceNormals(boundaryPoints, llf);
+      //vectorField faceNs = patch_.faceNormals();
+      
+      // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      //primitivePatchInterpolationSync patchInterpolator(patch_, mesh_);
+      //vectorField pointNorm = patchInterpolator.faceToPointInterpolate(faceNs);
+      
+      vectorField pointNorm = localFaceToPointNormalInterpolate(boundaryPoints, faceCs, faceNs, plistFaces, meshPoints);
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
-  
+      
       // fixing edges
       vector ny(0,1,0);
       vector nz(0,0,1);
@@ -634,36 +642,24 @@ public:
         }
       }
       
-      forAll(boundaryPoints, i){
-        boundaryPoints[i] += projectedDisplacement[i];
-      }
+      //forAll(boundaryPoints, i){
+      //  boundaryPoints[i] += projectedDisplacement[i];
+      //}
       
-      forAll(faceCs, i){
-        faceCs[i] = vector::zero;
-      }
-      
-      forAll(boundaryPoints, i){
-        point curP = boundaryPoints[i];
-        const labelList& pFaces = plistFaces[i];
-        forAll(pFaces, j){
-          label faceI = pFaces[j];
-          faceCs[faceI] += 1/4. * curP;
-        }
-      }
-      //scalar factor = 1.0+0.001*itt;
-      scalar factor = 6;
-      //if(factor>2.) factor = 2.0;
-      if(itt%2==0) factor = 1.17;
+
+      scalar factor = 1.0;
+      //if(itt%2==0) factor = 1.17;
       //vectorField finalDisplacement = boundaryPoints - patch_.localPoints();
-      vectorField finalDisplacement = factor * (boundaryPoints - patch_.localPoints());
+      //vectorField finalDisplacement = factor * (boundaryPoints - patch_.localPoints());
+      vectorField finalDisplacement = factor * projectedDisplacement;
       
-      pointField newPoints = mesh1.points();
-      labelList patchToAll = patch_.meshPoints();
-      forAll(finalDisplacement, i){
-        label indx = patchToAll[i];
-        newPoints[indx] += finalDisplacement[i];
-      }
-      mesh1.movePoints( newPoints );
+      //forAll(finalDisplacement, i){
+      //for(int i=0; i<10;i++){
+      //  Info<<finalDisplacement[i]<< "   " << displacement[i] <<nl;
+      //}
+      //std::exit(0);
+      
+      boundaryPoints += finalDisplacement;
       
       displ_tol = gSumSqr( mag(finalDisplacement) );
       reduce(displ_tol, sumOp<scalar>());
@@ -676,35 +672,31 @@ public:
       displ_tol /= Norm0;
       
       itt+=1;
-      Info<< patch_.name() << "  rlx iter "<< itt 
-              << "  factor "<< factor
-              << "  tolerance: " << displ_tol<< nl;
+      
+      if(itt%1000==0)
+        Info<< patch_.name() << "  rlx iter "<< itt 
+                << "  factor "<< factor
+                << "  tolerance: " << displ_tol<< nl;
     }
+    Info<< patch_.name() << "  converged in "<< itt 
+            << " iterations. Tolerance: " << displ_tol<< nl;
     
-    vectorField finalBoundaryDisplacement = patch_.localPoints() - saveBoundaryPoints;
-    mesh1.movePoints( savePoints );
-    
+    vectorField finalBoundaryDisplacement = boundaryPoints - patch_.localPoints();
       
     return finalBoundaryDisplacement;
   }
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+  Foam::pointField faceCentres(const pointField& points, const List<face>& flist) const;
+  Foam::vectorField faceNormals(const pointField& points, const List<face>& flist) const;
+
+  Foam::vectorField localFaceToPointNormalInterpolate(
+          const pointField& points,
+          const pointField& faceCs,
+          const vectorField& faceNs,
+          const labelListList& pointFaces,
+          const labelList& meshPoints
+
+  ) const;
   
   
   

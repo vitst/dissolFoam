@@ -326,11 +326,13 @@ int main(int argc, char *argv[])
     
     //while(displ_tol > rlxTol){
     {
-      Info<<"Relaxing wall..."<<nl;
-      vectorField wallRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[wallID], wW, rlxRuns, mesh);
+      Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
+      vectorField wallRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[wallID], wW, mesh);
+      Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
       
       Info<<"Relaxing inlet..."<<nl;
-      vectorField inlRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[inletID], iW, rlxRuns*3, mesh);
+      vectorField inlRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[inletID], iW, mesh);
+      Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
 
       displ_tolWall = max( mag(wallRelax) );
       reduce(displ_tolWall, maxOp<scalar>());

@@ -14,6 +14,8 @@
 #include "transformField.H"
 #include "symmTransformField.H"
 
+#include "triPointRef.H"
+
 
 // mesh1 is the mesh at time 0
 DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
@@ -43,7 +45,63 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
 }
 
 // ++
+Foam::pointField DissolMeshRlx::faceCentres(const pointField& points, const List<face>& flist) const
+{
+  pointField fc( flist.size() );
+  forAll(fc, facei)
+  {
+    fc[facei] = flist[facei].centre(points);
+  }
+  return fc;
+}
 
+Foam::vectorField DissolMeshRlx::faceNormals(const pointField& points, const List<face>& flist) const
+{
+  vectorField fn( flist.size() );
+  forAll(fn, facei)
+  {
+    fn[facei] = flist[facei].normal(points);
+    fn[facei] /= mag(fn[facei]) + VSMALL;
+  }
+  return fn;
+}
+
+Foam::vectorField DissolMeshRlx::localFaceToPointNormalInterpolate(const pointField& points,
+        const pointField& faceCs,
+        const vectorField& faceNs,
+        const labelListList& pointFaces,
+        const labelList& meshPoints
+        
+) const
+{
+  int N = points.size();
+  scalarList faceToPointSumWeights( N );
+  vectorField pointValue( N );
+  
+  forAll(pointFaces, pointi)
+  {
+      const labelList& curFaces = pointFaces[pointi];
+      pointValue[pointi] = vector::zero;
+      faceToPointSumWeights[pointi] = 0.0;
+      forAll(curFaces, facei)
+      {
+        scalar pw = 1.0 / mag(faceCs[curFaces[facei]] - points[pointi]);
+        pointValue[pointi] += pw * faceNs[ curFaces[facei] ];
+        faceToPointSumWeights[pointi] += pw;
+      }
+  }
+
+  // synchronization over coupled boundaries
+  syncTools::syncPointList(mesh_, meshPoints, pointValue, plusEqOp<vector>(), vector::zero);
+  syncTools::syncPointList(mesh_, meshPoints, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
+
+  // normalization
+  forAll(pointValue, pointi){
+    pointValue[pointi] /= faceToPointSumWeights[pointi];
+  }
+
+  return pointValue;
+}
 
 
 // ++
