@@ -104,7 +104,6 @@ int main(int argc, char *argv[])
     readBool( dissolProperties.lookup("fixInletConcentration") )
   );
   scalar rlxTol( dissolProperties.lookupOrDefault<scalar>("relaxationTolerance", 0.1) );
-  int rlxRuns( dissolProperties.lookupOrDefault<int>("relaxationRuns", 1) );
   
   scalar inigradingZ( dissolProperties.lookupOrDefault<scalar>("inigradingZ", 1.0) );
   scalar timeCoefZ( dissolProperties.lookupOrDefault<scalar>("timeCoefZ", 1.0) );
@@ -117,7 +116,6 @@ int main(int argc, char *argv[])
   Info << "*****************************************************************"<<nl;
   Info << "dissolFoamDict, fixInletConcentration:  " << fixInletConcentration <<nl;
   Info << "dissolFoamDict, rlxTol:  " << rlxTol <<nl;
-  Info << "dissolFoamDict, rlxRuns:  " << rlxRuns <<nl;
   Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
   Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
   Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;
@@ -286,13 +284,12 @@ int main(int argc, char *argv[])
     
     Info<<nl<<"Calculating new grading...."<< nl;
             
-    //scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
-    scalar Gz = 1.0;
+    scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
     scalar lambdaZ = 1/static_cast<double>(Nz) * std::log( Gz );
     
     scalarListList wallWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[wallID], lambdaZ, 3);
     const scalarListList& wW = wallWeights;
-
+    
     scalar Gy = inigradingY / (timeCoefY * runTime.value() + 1.0);
     scalar lambdaY = 1/static_cast<double>(Ny) * std::log( Gy );
     
@@ -302,15 +299,7 @@ int main(int argc, char *argv[])
     Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz
             <<"   Y grading is "<< Gy <<nl<<nl;
     
-    scalar displ_tolWall = 1.0;
-    scalar displ_tolInlet = 1.0;
-    scalar displ_tol = 1.0;
-    int i = 0;
-    
     pointField savedPointsAll = mesh.points();
-    pointField saveWallPoints = mesh.boundaryMesh()[wallID].localPoints();
-    pointField saveInletPoints = mesh.boundaryMesh()[inletID].localPoints();
-    
     
     const vectorField& wR = pointDispWall;
     pointField mpW = mesh_rlx->doWallDisplacement(wR * runTime.deltaTValue() );
@@ -324,41 +313,26 @@ int main(int argc, char *argv[])
     runTime.write();
     runTime++;
     
-    //while(displ_tol > rlxTol){
-    {
-      Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
-      vectorField wallRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[wallID], wW, mesh);
-      Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
-      
-      Info<<"Relaxing inlet..."<<nl;
-      vectorField inlRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[inletID], iW, mesh);
-      Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
+    Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
+    vectorField wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID], wW, rlxTol);
+    Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
 
-      displ_tolWall = max( mag(wallRelax) );
-      reduce(displ_tolWall, maxOp<scalar>());
-      displ_tolInlet = max( mag(inlRelax) );
-      reduce(displ_tolWall, maxOp<scalar>());
-      displ_tol = max(displ_tolWall, displ_tolInlet);
-      reduce(displ_tol, maxOp<scalar>());
-      
-      mesh.movePoints( savedPointsAll );
-      
-      wallRelax /= runTime.deltaTValue();
-      pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall;
-      
-      inlRelax /= runTime.deltaTValue();
-      pointVelocity.boundaryField()[inletID] == inlRelax + pointDispInlet;
-      
-      i+=1;
-      Info<< "rlx iter "<< i << "  tolerance: " << displ_tol<< nl;
-      
-      mesh.update();
-      
-      runTime.write();
-      runTime++;
-      std::exit(0);
-    }
-    Info<< "Displacement converged. Tolerance: " << displ_tol<< nl;
+    Info<<"Relaxing inlet..."<<nl;
+    vectorField inlRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[inletID], iW, rlxTol);
+    Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
+
+    mesh.movePoints( savedPointsAll );
+
+    wallRelax /= runTime.deltaTValue();
+    pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall;
+
+    inlRelax /= runTime.deltaTValue();
+    pointVelocity.boundaryField()[inletID] == inlRelax + pointDispInlet;
+
+    mesh.update();
+
+    //runTime.write();
+    //runTime++;
     
     Info<< "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
           << " s" << "  ClockTime = " << runTime.elapsedClockTime()

@@ -20,7 +20,7 @@
 // mesh1 is the mesh at time 0
 DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
 :
-  version(0.3),
+  version(0.4),
   mesh_(mesh)
 {
   // get ID of each patch we need
@@ -154,16 +154,12 @@ vectorField DissolMeshRlx::calculateOutletDisplacement(vectorField& wallDispl){
 }
 
 
-
 pointField DissolMeshRlx::doInletDisplacement(const vectorField& inletDispl){
   pointField newPoints = mesh_.points();
   forAll(inletDispl, i){
     label indx = inletToAll[i];
     newPoints[indx] += inletDispl[i];
   }
-  //const pointField& nP = newPoints;
-  
-  //mesh1.movePoints( newPoints );
   return newPoints;
 }
 
@@ -173,9 +169,6 @@ pointField DissolMeshRlx::doWallDisplacement(const vectorField& wallDispl){
     label indx = wallsToAll[i];
     newPoints[indx] += wallDispl[i];
   }
-  //const pointField& nP = newPoints;
-  
-  //mesh1.movePoints( newPoints );
   return newPoints;
 }
 
