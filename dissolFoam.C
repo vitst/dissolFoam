@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
     //pointDispOutlet += mesh_rlx->outletRlx(mesh.boundaryMesh()[outletID], pdw);
       
 //  Mesh update 4: Update boundary and relax interior mesh
-    Info<< nl << "Update boundary and relax interior mesh" <<nl;
+//    Info<< nl << "Update boundary and relax interior mesh" <<nl;
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!    
     //pointVelocity.boundaryField()[wallID] == pointDispWall;
     //pointVelocity.boundaryField()[inletID] == pointDispInlet;
@@ -273,10 +273,10 @@ int main(int argc, char *argv[])
     
     // ****************************************************************
     //vectorField zeroOutlet( pointDispOutlet.size(), vector::zero );
-    vectorField zeroInlet( pointDispInlet.size(), vector::zero );
-    vectorField zeroWall( pointDispWall.size(), vector::zero );
-    pointVelocity.boundaryField()[inletID] == zeroInlet;
-    pointVelocity.boundaryField()[wallID] == zeroWall;
+    //vectorField zeroInlet( pointDispInlet.size(), vector::zero );
+    //vectorField zeroWall( pointDispWall.size(), vector::zero );
+    //pointVelocity.boundaryField()[inletID] == zeroInlet;
+    //pointVelocity.boundaryField()[wallID] == zeroWall;
     //pointVelocity.boundaryField()[outletID] == zeroOutlet;
     // ****************************************************************
     
@@ -287,13 +287,13 @@ int main(int argc, char *argv[])
     scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
     scalar lambdaZ = 1/static_cast<double>(Nz) * std::log( Gz );
     
-    scalarListList wallWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[wallID], lambdaZ, 3);
+    scalarListList wallWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ, 3);
     const scalarListList& wW = wallWeights;
     
     scalar Gy = inigradingY / (timeCoefY * runTime.value() + 1.0);
     scalar lambdaY = 1/static_cast<double>(Ny) * std::log( Gy );
     
-    scalarListList inletWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[inletID], lambdaY, 2);
+    scalarListList inletWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[inletID], lambdaY, 2);
     const scalarListList& iW = inletWeights;
     
     Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz
@@ -305,13 +305,12 @@ int main(int argc, char *argv[])
     pointField mpW = mesh_rlx->doWallDisplacement(wR * runTime.deltaTValue() );
     mesh.movePoints( mpW);
     
-    
     const vectorField& iR = pointDispInlet;
     pointField mpI = mesh_rlx->doInletDisplacement(iR * runTime.deltaTValue());
     mesh.movePoints( mpI );
     
-    runTime.write();
-    runTime++;
+    //runTime.write();
+    //runTime++;
     
     Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
     vectorField wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID], wW, rlxTol);
@@ -337,6 +336,8 @@ int main(int argc, char *argv[])
     Info<< "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
           << " s" << "  ClockTime = " << runTime.elapsedClockTime()
           << " s" << nl << nl;
+    
+    //std::exit(0);
   
     run0timestep = true;
     Info<< "Process: Time = " << runTime.timeName() << nl << nl;

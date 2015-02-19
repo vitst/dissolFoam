@@ -105,6 +105,9 @@ public:
       
       // calculate current face centers
       pointField faceCs = faceCentres(boundaryPoints, llf);
+      vectorField faceNs = faceNormals(boundaryPoints, llf);
+      vectorField pointNorm( N, vector::zero );
+      scalarList faceToPointSumWeights( N, 0.0 );
 
       // create a displacement field for points
       vectorField displacement(N, vector::zero);
@@ -121,20 +124,34 @@ public:
 
           vector d = faceC - curP;
           
+          scalar mag_d = mag(d);
+          
           displacement[i] += d * pw[j];
-          tol[i] += mag(d) * pw[j];
+          tol[i] += mag_d * pw[j];
+          
+          // this is for normal
+          scalar nw = 1.0 / mag_d;
+          pointNorm[i] += nw * faceNs[ faceI ];
+          faceToPointSumWeights[i] += nw;
         }
       }
 
       // synchronizing over the cyclic and processor boundaries
       syncTools::syncPointList(mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, meshPoints, tol, plusEqOp<scalar>(), 0.0);
+      
+      syncTools::syncPointList(mesh_, meshPoints, pointNorm, plusEqOp<vector>(), vector::zero);
+      syncTools::syncPointList(mesh_, meshPoints, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
+      // normalization
+      forAll(pointNorm, pointi){
+        pointNorm[pointi] /= faceToPointSumWeights[pointi];
+      }
 
       // getting correct point normal field
-      vectorField faceNs = faceNormals(boundaryPoints, llf);
+      //vectorField faceNs = faceNormals(boundaryPoints, llf);
       //vectorField faceNs = patch_.faceNormals();
       
-      vectorField pointNorm = localFaceToPointNormalInterpolate(boundaryPoints, faceCs, faceNs, plistFaces, meshPoints);
+      //vectorField pointNorm = localFaceToPointNormalInterpolate(boundaryPoints, faceCs, faceNs, plistFaces, meshPoints);
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
@@ -204,155 +221,163 @@ public:
     return (boundaryPoints - patch_.localPoints());
   }
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
   template<class Patch>
-  scalarListList calc_weights(const Patch& patch_){
+  vectorField wallRelaxation1(Patch& patch_, const scalarListList& weights, double rlxTol){
+    pointField saveBoundaryPoints = patch_.localPoints();
 
+    const List<face>& llf = patch_.localFaces();
     const labelList& meshPoints = patch_.meshPoints();
-
-    const pointField& boundaryPoints = patch_.localPoints();
     const labelListList& plistFaces = patch_.pointFaces();
-    const pointField& faceCs = patch_.faceCentres();
+
+    pointField boundaryPoints = patch_.localPoints();
+    int N = boundaryPoints.size();
     
-    //const vectorField& faceNm = patch_.faceNormals();
-    //vector n_y(0, 1, 0);
-
-    scalarListList weights( boundaryPoints.size() );
-    scalarField sumWeights( boundaryPoints.size() );
-
-    forAll(boundaryPoints, i){
-      point curP = boundaryPoints[i];
-      const labelList& pFaces = plistFaces[i];
-
-      scalarList& pw = weights[i];
-      pw.setSize(pFaces.size());
+    double displ_tol = 1.0;
+    int itt = 0;
+    while(displ_tol>rlxTol){
       
-      scalar sumw = 0.0;
-      forAll(pFaces, j){
-        label faceI = pFaces[j];
-        point faceC = faceCs[faceI];
-        //vector faceN = faceNm[faceI];
+      // calculate current face centers
+      pointField faceCs = faceCentres(boundaryPoints, llf);
+      vectorField faceNs = faceNormals(boundaryPoints, llf);
+      vectorField pointNorm( N, vector::zero );
+      scalarList faceToPointSumWeights( N, 0.0 );
 
-        vector d = faceC - curP;
-        //pw[j] = 1/( mag(d) * mag(d) * mag(d) * mag(d));
-        pw[j] = 1/mag(d);
-        
-        /*
-        if( std::abs(d.z()) < SMALL  ){
-          Info<< "SMALLLLLLLLLLLLLL:   " << curP << "  " << faceC << endl;
-          pw[j] = 1.0;
-        }
-        else{
-          pw[j] = 1.0 / std::abs(d.z());
-        }
-        */
-        sumw += pw[j];
-      }
-      // sum of all distances to face centres
-      sumWeights[i] = sumw;
-    }
-
-    syncTools::syncPointList( mesh_, meshPoints, sumWeights, plusEqOp<scalar>(), 0.0);
+      // create a displacement field for points
+      vectorField displacement(N, vector::zero);
+      scalarField tol(N, 0.0);
     
-    forAll(weights, i){
-      scalarList& pw = weights[i];
-      forAll(pw, j){
-        pw[j] /= sumWeights[i];
+      forAll(boundaryPoints, i){
+        point& curP = boundaryPoints[i];
+        const labelList& pFaces = plistFaces[i];
+        const scalarList& pw = weights[i];
+
+        forAll(pFaces, j){
+          label faceI = pFaces[j];
+          point& faceC = faceCs[faceI];
+
+          vector d = faceC - curP;
+          
+          scalar mag_d = mag(d);
+          
+          displacement[i] += d * pw[j];
+          tol[i] += mag_d * pw[j];
+          
+          // this is for normal
+          scalar nw = 1.0 / mag_d;
+          pointNorm[i] += nw * faceNs[ faceI ];
+          faceToPointSumWeights[i] += nw;
+        }
       }
-    }
 
-    return weights;
-  }
-  
-  template<class Patch>
-  scalarListList calc_weights1(const Patch& patch_, scalar lambda){
-
-    const labelList& meshPoints = patch_.meshPoints();
-
-    const pointField& boundaryPoints = patch_.localPoints();
-    const labelListList& plistFaces = patch_.pointFaces();
-    const pointField& faceCs = patch_.faceCentres();
-    
-    //const vectorField& faceNm = patch_.faceNormals();
-    //vector n_y(0, 1, 0);
-
-    scalarListList weights( boundaryPoints.size() );
-    scalarField sumWeights( boundaryPoints.size() );
-
-    forAll(boundaryPoints, i){
-      point curP = boundaryPoints[i];
-      const labelList& pFaces = plistFaces[i];
-
-      scalarList& pw = weights[i];
-      pw.setSize(pFaces.size());
+      // synchronizing over the cyclic and processor boundaries
+      syncTools::syncPointList(mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
+      syncTools::syncPointList(mesh_, meshPoints, tol, plusEqOp<scalar>(), 0.0);
       
-      scalar sumw = 0.0;
-      forAll(pFaces, j){
-        label faceI = pFaces[j];
-        point faceC = faceCs[faceI];
-        //vector faceN = faceNm[faceI];
-
-        vector d = faceC - curP;
-        //pw[j] = 1/( mag(d) * mag(d) * mag(d) * mag(d));
-        //pw[j] = 1/mag(d);
-        if( std::abs(d.z()) < SMALL  ){
-          Info<< "SMALLLLLLLLLLLLLL:   " << curP << "  " << faceC << endl;
-          pw[j] = 1.0;
-        }
-        else{
-          pw[j] = (1 - 0.5 * lambda * d.z()/std::abs(d.z()) );
-        }
-        sumw += pw[j];
+      syncTools::syncPointList(mesh_, meshPoints, pointNorm, plusEqOp<vector>(), vector::zero);
+      syncTools::syncPointList(mesh_, meshPoints, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
+      // normalization
+      forAll(pointNorm, pointi){
+        pointNorm[pointi] /= faceToPointSumWeights[pointi];
       }
-      // sum of all distances to face centres
-      sumWeights[i] = sumw;
-    }
 
-    syncTools::syncPointList( mesh_, meshPoints, sumWeights, plusEqOp<scalar>(), 0.0);
+      // getting correct point normal field
+      //vectorField faceNs = faceNormals(boundaryPoints, llf);
+      //vectorField faceNs = patch_.faceNormals();
+      
+      //vectorField pointNorm = localFaceToPointNormalInterpolate(boundaryPoints, faceCs, faceNs, plistFaces, meshPoints);
+
+      //vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
+      
+      // fixing edges
+      vector ny(0,1,0);
+      vector nz(0,0,1);
+      vectorField projectedDisplacement = transform(I - nz*nz, displacement);
+
+      vectorField inletPrj( global_WallInletEdges.size() );
+
+      forAll(global_WallInletEdges, i){
+        label ind = findIndex( meshPoints, global_WallInletEdges[i]);
+        if( ind!=-1 ){
+          inletPrj[i] = projectedDisplacement[ ind ];
+        }
+      }
+
+      inletPrj = transform(I - ny*ny, inletPrj);
+      inletPrj = transform(I - nz*nz, inletPrj);
+
+      forAll(global_WallInletEdges, i){
+        label ind = findIndex( meshPoints, global_WallInletEdges[i]);
+        if( ind!=-1 ){
+          projectedDisplacement[ ind ] = inletPrj[i];
+        }
+      }
+
+      // project back outlet
+      vectorField outletPrj( global_WallOutletEdges.size() );
+
+      forAll(global_WallOutletEdges, i){
+        label ind = findIndex( meshPoints, global_WallOutletEdges[i]);
+        if( ind!=-1 ){
+          outletPrj[i] = projectedDisplacement[ ind ];
+        }
+      }
+
+      outletPrj = transform(I - ny*ny, outletPrj);
+      outletPrj = transform(I - nz*nz, outletPrj);
+
+      forAll(global_WallOutletEdges, i){
+        label ind = findIndex( meshPoints, global_WallOutletEdges[i]);
+        if( ind!=-1 ){
+          projectedDisplacement[ ind ] = outletPrj[i];
+        }
+      }
+      
+      scalar factor = 6.0;
+      if(itt%2==0) factor = 1.17;
+      vectorField finalDisplacement = factor * projectedDisplacement;
+      
+      boundaryPoints += finalDisplacement;
+      
+      displ_tol = average( mag(finalDisplacement)/tol );
+      reduce(displ_tol, sumOp<scalar>());
+      displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
+      
+      if(itt%1000==0){
+        Info<<patch_.name()<<"  rlx iter "<<itt
+                <<"  factor "<<factor<<"  tolerance: "<<displ_tol<< nl;
+      }
+      
+      itt+=1;
+    }
+    Info<< patch_.name() << "  converged in "<< itt 
+            << " iterations. Tolerance: " << displ_tol<< nl;
     
-    forAll(weights, i){
-      scalarList& pw = weights[i];
-      forAll(pw, j){
-        pw[j] /= sumWeights[i];
-      }
-    }
-
-    return weights;
+    return (boundaryPoints - patch_.localPoints());
   }
 
 
 
+
+
+
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
   template<class Patch>
-  scalarListList calc_weights2(const Patch& patch_, scalar lambda, int dir){
+  scalarListList calc_weights(const Patch& patch_, scalar lambda, int dir){
 
     const labelList& meshPoints = patch_.meshPoints();
 
@@ -433,76 +458,6 @@ public:
   }
 
 
-
-  template<class Patch>
-  scalarListList calc_weights3(const Patch& patch_, scalar lambda, int dir){
-
-    const labelList& meshPoints = patch_.meshPoints();
-
-    const pointField& boundaryPoints = patch_.localPoints();
-    const labelListList& plistFaces = patch_.pointFaces();
-    const pointField& faceCs = patch_.faceCentres();
-    
-    scalarListList weights( boundaryPoints.size() );
-    scalarField sumWeights( boundaryPoints.size() );
-
-    forAll(boundaryPoints, i){
-      point curP = boundaryPoints[i];
-      const labelList& pFaces = plistFaces[i];
-
-      scalarList& pw = weights[i];
-      pw.setSize(pFaces.size());
-      
-      scalar sumw = 0.0;
-      forAll(pFaces, j){
-        label faceI = pFaces[j];
-        point faceC = faceCs[faceI];
-
-        vector d = faceC - curP;
-        //pw[j] = (1 - 0.5 * lambda * d.z()/std::abs(d.z()) );
-        pw[j] = std::abs( d.z() );
-        //sumw += pw[j];
-      }
-      
-      lambda = (max(pw)-min(pw))/(max(pw)+min(pw));
-      
-      forAll(pFaces, j){
-        label faceI = pFaces[j];
-        point faceC = faceCs[faceI];
-
-        vector d = faceC - curP;
-        pw[j] = (1 - 0.5 * lambda * d.z()/std::abs(d.z()) );
-        sumw += pw[j];
-      }
-      
-      // sum of all distances to face centres
-      sumWeights[i] = sumw;
-    }
-
-    syncTools::syncPointList( mesh_, meshPoints, sumWeights, plusEqOp<scalar>(), 0.0);
-    
-    forAll(weights, i){
-      scalarList& pw = weights[i];
-      
-      forAll(pw, j){
-        pw[j] /= sumWeights[i];
-      }
-    }
-
-    return weights;
-  }
-
-
-
-
-
-
-
-
-
-
-
-  
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
