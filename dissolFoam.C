@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
   label inletID = mesh.boundaryMesh().findPatchID("inlet");
-  //label outletID = mesh.boundaryMesh().findPatchID("outlet");
+  label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
   Info<< "Setup mesh relaxation class" << endl;
   // reference to the mesh relaxation object
@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
     vectorField pointDispInlet = mesh_rlx->calculateInletDisplacement(pdw);
     //pointDispInlet += mesh_rlx->inletRlx(mesh.boundaryMesh()[inletID], pdw);
             
-    //vectorField pointDispOutlet = mesh_rlx->calculateOutletDisplacement(pdw);
+    vectorField pointDispOutlet = mesh_rlx->calculateOutletDisplacement(pdw);
     //pointDispOutlet += mesh_rlx->outletRlx(mesh.boundaryMesh()[outletID], pdw);
       
 //  Mesh update 4: Update boundary and relax interior mesh
@@ -296,6 +296,9 @@ int main(int argc, char *argv[])
     scalarListList inletWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[inletID], lambdaY, 2);
     const scalarListList& iW = inletWeights;
     
+    scalarListList outletWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[outletID], lambdaY, 2);
+    const scalarListList& oW = outletWeights;
+    
     Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz
             <<"   Y grading is "<< Gy <<nl<<nl;
     
@@ -309,6 +312,9 @@ int main(int argc, char *argv[])
     pointField mpI = mesh_rlx->doInletDisplacement(iR * runTime.deltaTValue());
     mesh.movePoints( mpI );
     
+    const vectorField& oR = pointDispOutlet;
+    pointField mpO = mesh_rlx->doOutletDisplacement(oR * runTime.deltaTValue());
+    mesh.movePoints( mpO );
     //runTime.write();
     //runTime++;
     
@@ -320,6 +326,10 @@ int main(int argc, char *argv[])
     vectorField inlRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[inletID], iW, rlxTol);
     Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
 
+    Info<<"Relaxing outlet..."<<nl;
+    vectorField outRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[outletID], oW, rlxTol);
+    Info<<"Outlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
+    
     mesh.movePoints( savedPointsAll );
 
     wallRelax /= runTime.deltaTValue();
@@ -328,6 +338,9 @@ int main(int argc, char *argv[])
     inlRelax /= runTime.deltaTValue();
     pointVelocity.boundaryField()[inletID] == inlRelax + pointDispInlet;
 
+    outRelax /= runTime.deltaTValue();
+    pointVelocity.boundaryField()[outletID] == outRelax + pointDispOutlet;
+    
     mesh.update();
 
     //runTime.write();

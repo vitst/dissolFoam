@@ -136,10 +136,18 @@ vectorField DissolMeshRlx::calculateOutletDisplacement(vectorField& wallDispl){
   scalar maxdZ = 0;
   forAll(local_wall_WallsOutletEdges, i){
     vector A = wallDispl[ local_wall_WallsOutletEdges[i] ];
-    maxdZ = max( maxdZ, A.z() );    
+    if( mag(A.z()) > maxdZ ){
+      maxdZ = A.z();
+    }
   }
 
   reduce(maxdZ, maxOp<scalar>());
+  
+  vectorField pointDispOutlet( mesh_.boundaryMesh()[outletID].localPoints().size(), vector::zero );
+  pointDispOutlet.replace( vector::Z, maxdZ);
+  forAll(local_outlet_WallsOutletEdges, i){
+    pointDispOutlet[ local_outlet_WallsOutletEdges[i] ].z() = 0;
+  }
 
   forAll(local_wall_WallsOutletEdges, i){
     vector A = wallDispl[ local_wall_WallsOutletEdges[i] ];
@@ -147,10 +155,6 @@ vectorField DissolMeshRlx::calculateOutletDisplacement(vectorField& wallDispl){
           
     wallDispl[ local_wall_WallsOutletEdges[i] ] += dz;
   }
-
-  vectorField pointDispOutlet( mesh_.boundaryMesh()[outletID].localPoints().size(), vector::zero );
-      
-  pointDispOutlet.replace( vector::Z, maxdZ);
 
   return pointDispOutlet;
 }
@@ -174,6 +178,16 @@ pointField DissolMeshRlx::doWallDisplacement(const vectorField& wallDispl){
   return newPoints;
 }
 
+pointField DissolMeshRlx::doOutletDisplacement(const vectorField& outletDispl){
+  pointField newPoints = mesh_.points();
+  forAll(outletDispl, i){
+    label indx = outletToAll[i];
+    newPoints[indx] += outletDispl[i];
+  }
+  return newPoints;
+}
+
+
 // ++
 void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){
   const pointField& boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();
@@ -189,7 +203,7 @@ void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){
     scalar c2 = mag( cN2 );
     
     scalar newC0 = extrapolateConcentrationLinearZ(boundaryPoints, c1, c2, currentTriple);
-    //scalar newC0 = extrapolateConcentrationExp(boundaryPoints, c1, c2, currentTriple) + 4.0;
+    //scalar newC0 = extrapolateConcentrationExpZ(boundaryPoints, c1, c2, currentTriple);
     
     concNorm[ currentTriple[0] ] = newC0 * cN0 / c0;
     
@@ -199,7 +213,7 @@ void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){
 
 
 
-scalar DissolMeshRlx::extrapolateConcentrationExp(const pointField& loc_points,
+scalar DissolMeshRlx::extrapolateConcentrationExpZ(const pointField& loc_points,
                                 scalar& c1, scalar& c2, 
                                 const labelList& pnts){
   scalar r02 = loc_points[ pnts[0] ].z() - loc_points[ pnts[2] ].z();
@@ -207,6 +221,16 @@ scalar DissolMeshRlx::extrapolateConcentrationExp(const pointField& loc_points,
 
   return c2 * std::pow( c1/c2, r02/r12 );
 }
+
+scalar DissolMeshRlx::extrapolateConcentrationExp(const pointField& loc_points,
+                                scalar& c1, scalar& c2, 
+                                const labelList& pnts){
+  scalar r02 = mag( loc_points[ pnts[0] ] - loc_points[ pnts[2] ] );
+  scalar r12 = mag( loc_points[ pnts[1] ] - loc_points[ pnts[2] ] );
+
+  return c2 * std::pow( c1/c2, r02/r12 );
+}
+
 
 scalar DissolMeshRlx::extrapolateConcentrationLinear(const pointField& loc_points,
                                 const scalarField& point_conc,

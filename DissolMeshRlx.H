@@ -54,6 +54,8 @@ private:
 
   
   scalar extrapolateConcentrationExp(const pointField&, scalar&, scalar&, const labelList&);
+  scalar extrapolateConcentrationExpZ(const pointField&, scalar&, scalar&, const labelList&);
+  
   scalar extrapolateConcentrationLinear(const pointField&, const scalarField&, label, label, label);
   //scalar extrapolateConcentrationLinearZ(const pointField&, const scalarField&, label, label, label);
   scalar extrapolateConcentrationLinearZ(const pointField&, scalar&, scalar&, const labelList&);
@@ -86,6 +88,7 @@ public:
   
   pointField doInletDisplacement(const vectorField&);
   pointField doWallDisplacement(const vectorField&);
+  pointField doOutletDisplacement(const vectorField&);
   
   
   template<class Patch>
@@ -222,160 +225,6 @@ public:
   }
 
 
-
-
-
-
-  template<class Patch>
-  vectorField wallRelaxation1(Patch& patch_, const scalarListList& weights, double rlxTol){
-    pointField saveBoundaryPoints = patch_.localPoints();
-
-    const List<face>& llf = patch_.localFaces();
-    const labelList& meshPoints = patch_.meshPoints();
-    const labelListList& plistFaces = patch_.pointFaces();
-
-    pointField boundaryPoints = patch_.localPoints();
-    int N = boundaryPoints.size();
-    
-    double displ_tol = 1.0;
-    int itt = 0;
-    while(displ_tol>rlxTol){
-      
-      // calculate current face centers
-      pointField faceCs = faceCentres(boundaryPoints, llf);
-      vectorField faceNs = faceNormals(boundaryPoints, llf);
-      vectorField pointNorm( N, vector::zero );
-      scalarList faceToPointSumWeights( N, 0.0 );
-
-      // create a displacement field for points
-      vectorField displacement(N, vector::zero);
-      scalarField tol(N, 0.0);
-    
-      forAll(boundaryPoints, i){
-        point& curP = boundaryPoints[i];
-        const labelList& pFaces = plistFaces[i];
-        const scalarList& pw = weights[i];
-
-        forAll(pFaces, j){
-          label faceI = pFaces[j];
-          point& faceC = faceCs[faceI];
-
-          vector d = faceC - curP;
-          
-          scalar mag_d = mag(d);
-          
-          displacement[i] += d * pw[j];
-          tol[i] += mag_d * pw[j];
-          
-          // this is for normal
-          scalar nw = 1.0 / mag_d;
-          pointNorm[i] += nw * faceNs[ faceI ];
-          faceToPointSumWeights[i] += nw;
-        }
-      }
-
-      // synchronizing over the cyclic and processor boundaries
-      syncTools::syncPointList(mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
-      syncTools::syncPointList(mesh_, meshPoints, tol, plusEqOp<scalar>(), 0.0);
-      
-      syncTools::syncPointList(mesh_, meshPoints, pointNorm, plusEqOp<vector>(), vector::zero);
-      syncTools::syncPointList(mesh_, meshPoints, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
-      // normalization
-      forAll(pointNorm, pointi){
-        pointNorm[pointi] /= faceToPointSumWeights[pointi];
-      }
-
-      // getting correct point normal field
-      //vectorField faceNs = faceNormals(boundaryPoints, llf);
-      //vectorField faceNs = patch_.faceNormals();
-      
-      //vectorField pointNorm = localFaceToPointNormalInterpolate(boundaryPoints, faceCs, faceNs, plistFaces, meshPoints);
-
-      //vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
-      
-      // fixing edges
-      vector ny(0,1,0);
-      vector nz(0,0,1);
-      vectorField projectedDisplacement = transform(I - nz*nz, displacement);
-
-      vectorField inletPrj( global_WallInletEdges.size() );
-
-      forAll(global_WallInletEdges, i){
-        label ind = findIndex( meshPoints, global_WallInletEdges[i]);
-        if( ind!=-1 ){
-          inletPrj[i] = projectedDisplacement[ ind ];
-        }
-      }
-
-      inletPrj = transform(I - ny*ny, inletPrj);
-      inletPrj = transform(I - nz*nz, inletPrj);
-
-      forAll(global_WallInletEdges, i){
-        label ind = findIndex( meshPoints, global_WallInletEdges[i]);
-        if( ind!=-1 ){
-          projectedDisplacement[ ind ] = inletPrj[i];
-        }
-      }
-
-      // project back outlet
-      vectorField outletPrj( global_WallOutletEdges.size() );
-
-      forAll(global_WallOutletEdges, i){
-        label ind = findIndex( meshPoints, global_WallOutletEdges[i]);
-        if( ind!=-1 ){
-          outletPrj[i] = projectedDisplacement[ ind ];
-        }
-      }
-
-      outletPrj = transform(I - ny*ny, outletPrj);
-      outletPrj = transform(I - nz*nz, outletPrj);
-
-      forAll(global_WallOutletEdges, i){
-        label ind = findIndex( meshPoints, global_WallOutletEdges[i]);
-        if( ind!=-1 ){
-          projectedDisplacement[ ind ] = outletPrj[i];
-        }
-      }
-      
-      scalar factor = 6.0;
-      if(itt%2==0) factor = 1.17;
-      vectorField finalDisplacement = factor * projectedDisplacement;
-      
-      boundaryPoints += finalDisplacement;
-      
-      displ_tol = average( mag(finalDisplacement)/tol );
-      reduce(displ_tol, sumOp<scalar>());
-      displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
-      
-      if(itt%1000==0){
-        Info<<patch_.name()<<"  rlx iter "<<itt
-                <<"  factor "<<factor<<"  tolerance: "<<displ_tol<< nl;
-      }
-      
-      itt+=1;
-    }
-    Info<< patch_.name() << "  converged in "<< itt 
-            << " iterations. Tolerance: " << displ_tol<< nl;
-    
-    return (boundaryPoints - patch_.localPoints());
-  }
-
-
-
-
-
-
-
-
-
-
-  
-  
-  
-  
-  
-  
-  
   template<class Patch>
   scalarListList calc_weights(const Patch& patch_, scalar lambda, int dir){
 
