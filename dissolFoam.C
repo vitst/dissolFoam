@@ -48,6 +48,14 @@ Description
 #include "primitivePatchInterpolationSync.H"
 #include "DissolMeshRlx.H"
 
+// mesh search
+#include "interpolation.H"
+#include "triSurface.H"
+#include "triSurfaceTools.H"
+#include "triSurfaceSearch.H"
+#include "meshSearch.H"
+
+
 /*
  #######################################################################################
  *    Main program body
@@ -164,6 +172,75 @@ int main(int argc, char *argv[])
         #include "pEqn.H"
         //turbulence->correct();
       }
+      
+      // ***************************************************************************
+      
+      labelHashSet includePatches(1);
+      includePatches.insert(wallID);
+      triSurface wallTriSurface
+      (
+        triSurfaceTools::triangulate( mesh.boundaryMesh(), includePatches )
+      );
+      const triSurfaceSearch querySurf(wallTriSurface);
+      const indexedOctree<treeDataTriSurface>& tree = querySurf.tree();
+      bool pm = false, mp = false;
+      
+      pointField pointFaceCntr = mesh.boundaryMesh()[inletID].faceCentres();
+      scalarField Cinlet( pointFaceCntr.size() );
+      
+      scalar lp = 0.5;
+      
+      forAll(Cinlet, i){
+        point p = pointFaceCntr[i];
+        point searchStart = p;
+        searchStart.y() = 0.0;
+        searchStart.z() += 0.01;
+        point searchEnd = searchStart;
+        searchStart.y() = 500.0;
+        
+        point maxY = p;
+        pointIndexHit pHit = tree.findLine(searchStart, searchEnd);
+        if ( pHit.hit() )
+        {
+          maxY =  pHit.hitPoint();
+          pm = true;
+        }
+        else{
+        }
+        
+        point minY = p;
+        searchStart.y() = -500.0;
+        pHit = tree.findLine(searchStart, searchEnd);
+        if ( pHit.hit() )
+        {
+          minY = pHit.hitPoint();
+          mp = true;
+        }
+        else{
+        }
+        
+        if(pm && !mp){
+          Info<<"WARNING! The ray did not find the surface from + direction"<<nl;
+        }
+        else if(!pm && mp){
+          Info<<"WARNING! The ray did not find the surface from - direction"<<nl;
+        }
+        else if(!pm && !mp){
+          Info<<"WARNING! The ray did not find the surface from - direction"<<nl;
+        }
+        
+        scalar h = mag(maxY-minY);
+        if(h == 0.0){
+          Info<<"h=0  "<< p << "   "<< min(mesh.boundaryMesh()[wallID].localPoints().component(vector::Z))<<nl;
+        }
+        scalar a=8.0/(h*h+4*h*lp);
+        Cinlet[i] = 1-a/2.0 * p.y()*p.y();
+      }
+      
+      C.boundaryField()[inletID] == Cinlet;
+       
+      // ***************************************************************************
+      
 
       /*############################################
       *   Steady-state convection-diffusion solver
@@ -315,6 +392,7 @@ int main(int argc, char *argv[])
     const vectorField& oR = pointDispOutlet;
     pointField mpO = mesh_rlx->doOutletDisplacement(oR * runTime.deltaTValue());
     mesh.movePoints( mpO );
+    
     //runTime.write();
     //runTime++;
     
@@ -322,6 +400,17 @@ int main(int argc, char *argv[])
     vectorField wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID], wW, rlxTol);
     Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
 
+    /*
+    const vectorField& wR1 = wallRelax + pointDispWall;
+    pointField mpW1 = mesh_rlx->doWallDisplacement(wR1 * runTime.deltaTValue() );
+    mesh.movePoints( mpW1 );
+    runTime.write();
+    runTime++;
+    std::exit(0);
+    */
+    
+    
+    
     Info<<"Relaxing inlet..."<<nl;
     vectorField inlRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[inletID], iW, rlxTol);
     Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
@@ -330,6 +419,20 @@ int main(int argc, char *argv[])
     vectorField outRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[outletID], oW, rlxTol);
     Info<<"Outlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
     
+    /*
+    mesh.movePoints( savedPointsAll );
+    const vectorField& iR1 = inlRelax + pointDispInlet;
+    pointField mpI1 = mesh_rlx->doInletDisplacement(iR1 * runTime.deltaTValue());
+    mesh.movePoints( mpI1 );
+    runTime.write();
+    runTime++;
+    const vectorField& oR1 = outRelax + pointDispOutlet;
+    pointField mpO1 = mesh_rlx->doOutletDisplacement(oR1 * runTime.deltaTValue());
+    mesh.movePoints( mpO1 );
+    
+    std::exit(0);
+     */
+    
     mesh.movePoints( savedPointsAll );
 
     wallRelax /= runTime.deltaTValue();
@@ -337,12 +440,13 @@ int main(int argc, char *argv[])
 
     inlRelax /= runTime.deltaTValue();
     pointVelocity.boundaryField()[inletID] == inlRelax + pointDispInlet;
-
+    
     outRelax /= runTime.deltaTValue();
     pointVelocity.boundaryField()[outletID] == outRelax + pointDispOutlet;
     
     mesh.update();
 
+    
     //runTime.write();
     //runTime++;
     
