@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
           Info<<"WARNING! The ray did not find the surface from - direction"<<nl;
         }
         else if(!pm && !mp){
-          Info<<"WARNING! The ray did not find the surface from - direction"<<nl;
+          Info<<"WARNING! The ray did not find the surface from both direction"<<nl;
         }
         
         scalar h = mag(maxY-minY);
@@ -235,6 +235,11 @@ int main(int argc, char *argv[])
         }
         scalar a=8.0/(h*h+4*h*lp);
         Cinlet[i] = 1-a/2.0 * p.y()*p.y();
+        
+        //scalar G = 2*h/lp; // = 2kh/D
+        //scalar  alpha = 4*G/(8+G);
+        //scalar aa = 1-alpha/20.0; 
+        
       }
       
       C.boundaryField()[inletID] == Cinlet;
@@ -370,11 +375,11 @@ int main(int argc, char *argv[])
     scalar Gy = inigradingY / (timeCoefY * runTime.value() + 1.0);
     scalar lambdaY = 1/static_cast<double>(Ny) * std::log( Gy );
     
-    scalarListList inletWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[inletID], lambdaY, 2);
-    const scalarListList& iW = inletWeights;
+    vectorFieldList inletWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[inletID], lambdaY, 2);
+    const vectorFieldList& iW = inletWeights;
     
-    scalarListList outletWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[outletID], lambdaY, 2);
-    const scalarListList& oW = outletWeights;
+    //scalarListList outletWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[outletID], lambdaY, 2);
+    //const scalarListList& oW = outletWeights;
     
     Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz
             <<"   Y grading is "<< Gy <<nl<<nl;
@@ -389,60 +394,57 @@ int main(int argc, char *argv[])
     pointField mpI = mesh_rlx->doInletDisplacement(iR * runTime.deltaTValue());
     mesh.movePoints( mpI );
     
-    const vectorField& oR = pointDispOutlet;
-    pointField mpO = mesh_rlx->doOutletDisplacement(oR * runTime.deltaTValue());
-    mesh.movePoints( mpO );
+    //const vectorField& oR = pointDispOutlet;
+    //pointField mpO = mesh_rlx->doOutletDisplacement(oR * runTime.deltaTValue());
+    //mesh.movePoints( mpO );
     
-    //runTime.write();
-    //runTime++;
+    runTime.write();
+    runTime++;
     
     Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
-    vectorField wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID], wW, rlxTol);
+    vectorField wallRelax = mesh_rlx->wallRelaxation1( mesh.boundaryMesh()[wallID], wW, rlxTol);
     Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
 
-    /*
-    const vectorField& wR1 = wallRelax + pointDispWall;
+    Info<<"Relaxing inlet..."<<nl;
+    vectorField inlRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[inletID], iW, rlxTol);
+    Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
+
+    //Info<<"Relaxing outlet..."<<nl;
+    //vectorField outRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[outletID], oW, rlxTol);
+    //Info<<"Outlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
+    
+    
+    mesh.movePoints( savedPointsAll );
+    const vectorField wR1 = wallRelax/runTime.deltaTValue() + pointDispWall;
     pointField mpW1 = mesh_rlx->doWallDisplacement(wR1 * runTime.deltaTValue() );
     mesh.movePoints( mpW1 );
     runTime.write();
     runTime++;
-    std::exit(0);
-    */
-    
-    
-    
-    Info<<"Relaxing inlet..."<<nl;
-    vectorField inlRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[inletID], iW, rlxTol);
-    Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
-
-    Info<<"Relaxing outlet..."<<nl;
-    vectorField outRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[outletID], oW, rlxTol);
-    Info<<"Outlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
-    
-    /*
-    mesh.movePoints( savedPointsAll );
-    const vectorField& iR1 = inlRelax + pointDispInlet;
+    const vectorField iR1 = inlRelax/runTime.deltaTValue() + pointDispInlet;
     pointField mpI1 = mesh_rlx->doInletDisplacement(iR1 * runTime.deltaTValue());
     mesh.movePoints( mpI1 );
     runTime.write();
     runTime++;
-    const vectorField& oR1 = outRelax + pointDispOutlet;
+    /*
+    const vectorField oR1 = outRelax/runTime.deltaTValue() + pointDispOutlet;
     pointField mpO1 = mesh_rlx->doOutletDisplacement(oR1 * runTime.deltaTValue());
     mesh.movePoints( mpO1 );
-    
-    std::exit(0);
+    runTime.write();
+    runTime++;
      */
+    std::exit(0);
+    
     
     mesh.movePoints( savedPointsAll );
 
-    wallRelax /= runTime.deltaTValue();
-    pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall;
+    //wallRelax /= runTime.deltaTValue();
+    //pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall;
 
     inlRelax /= runTime.deltaTValue();
     pointVelocity.boundaryField()[inletID] == inlRelax + pointDispInlet;
     
-    outRelax /= runTime.deltaTValue();
-    pointVelocity.boundaryField()[outletID] == outRelax + pointDispOutlet;
+    //outRelax /= runTime.deltaTValue();
+    //pointVelocity.boundaryField()[outletID] == outRelax + pointDispOutlet;
     
     mesh.update();
 
