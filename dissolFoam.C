@@ -29,6 +29,8 @@ Description
     the mesh according to the reactant flux.
 \*---------------------------------------------------------------------------*/
 
+#include <gsl/gsl_sf_hyperg.h>
+
 // OF includes
 
 // common OFe solver and OF simpleFoam
@@ -48,6 +50,7 @@ Description
 #include "primitivePatchInterpolationSync.H"
 #include "DissolMeshRlx.H"
 
+
 // mesh search
 #include "interpolation.H"
 #include "triSurface.H"
@@ -55,6 +58,8 @@ Description
 #include "triSurfaceSearch.H"
 #include "meshSearch.H"
 
+// interpolation and tables
+#include "interpolationTable.H"
 
 /*
  #######################################################################################
@@ -111,6 +116,12 @@ int main(int argc, char *argv[])
   (
     readBool( dissolProperties.lookup("fixInletConcentration") )
   );
+  
+  bool cInletHypergeometric
+  (
+    dissolProperties.lookupOrDefault<bool>("hypergeometric", false)
+  );
+  
   scalar rlxTol( dissolProperties.lookupOrDefault<scalar>("relaxationTolerance", 0.1) );
   
   scalar inigradingZ( dissolProperties.lookupOrDefault<scalar>("inigradingZ", 1.0) );
@@ -132,6 +143,8 @@ int main(int argc, char *argv[])
   Info << "dissolFoamDict, numberOfCellsY:  " << Ny <<nl;
   Info << "*****************************************************************"<<nl;
   
+  interpolationTable<scalar> sherwoodNumTab ("Sh.dat");
+  
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
   // Get patch ID for boundaries we want to move ("walls" "inlet")
@@ -143,6 +156,12 @@ int main(int argc, char *argv[])
   // reference to the mesh relaxation object
   DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh);
   
+    scalar Gy = inigradingY / (timeCoefY * runTime.value() + 1.0);
+    scalar lambdaY = 1/static_cast<double>(Ny) * std::log( Gy );
+    
+    scalarListList inletWeights = mesh_rlx->calc_weights1( mesh.boundaryMesh()[inletID], lambdaY, 2);
+    const scalarListList& iW = inletWeights;
+    
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
   /*
@@ -233,12 +252,31 @@ int main(int argc, char *argv[])
         if(h == 0.0){
           Info<<"h=0  "<< p << "   "<< min(mesh.boundaryMesh()[wallID].localPoints().component(vector::Z))<<nl;
         }
-        scalar a=8.0/(h*h+4*h*lp);
-        Cinlet[i] = 1-a/2.0 * p.y()*p.y();
         
-        //scalar G = 2*h/lp; // = 2kh/D
-        //scalar  alpha = 4*G/(8+G);
-        //scalar aa = 1-alpha/20.0; 
+        if( cInletHypergeometric ){
+          // the concentration profile based on Hypergeometric function
+          //scalar Sh = 8.0;
+          scalar G = 2*h/lp;
+          scalar Sh = sherwoodNumTab( Foam::log10(G) );
+          scalar lam = Sh / (G+Sh);
+          scalar r  = Foam::sqrt( 3*G*lam/8 );
+          scalar yh = (p.y() + h/2.) / h;
+          scalar gz = gsl_sf_hyperg_1F1( 0.25*(1-r), 0.5, r*(2*yh-1)*(2*yh-1) ) * Foam::exp(-2 * r *yh*(yh-1));
+          yh = 0.0;
+          scalar gz0 = gsl_sf_hyperg_1F1( 0.25*(1-r), 0.5, r*(2*yh-1)*(2*yh-1) ) * Foam::exp(-2 * r *yh*(yh-1));
+          scalar fA = lam / gz0;
+
+          Cinlet[i] = fA * gz;
+        }
+        else{
+          // parabolic function
+          scalar a=8.0/(h*h+4*h*lp);
+          Cinlet[i] = 1-a/2.0 * p.y()*p.y();
+          scalar G = 2*h/lp; // = 2kh/D
+          scalar alpha = 4*G/(8+G);
+
+          Cinlet[i] /= 1-alpha/20.0;
+        }
         
       }
       
@@ -372,14 +410,25 @@ int main(int argc, char *argv[])
     scalarListList wallWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ, 3);
     const scalarListList& wW = wallWeights;
     
+    /*
     scalar Gy = inigradingY / (timeCoefY * runTime.value() + 1.0);
     scalar lambdaY = 1/static_cast<double>(Ny) * std::log( Gy );
     
     vectorFieldList inletWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[inletID], lambdaY, 2);
     const vectorFieldList& iW = inletWeights;
+    */
     
-    //scalarListList outletWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[outletID], lambdaY, 2);
-    //const scalarListList& oW = outletWeights;
+    /*
+    forAll(inletWeights, ii){
+      Info<< ii << "  " << inletWeights[ii]<<nl;
+    }
+    std::exit(0);
+     */
+    
+    //vectorFieldList outletWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[outletID], lambdaY, 2);
+    //const vectorFieldList& oW = outletWeights;
+    scalarListList outletWeights = mesh_rlx->calc_weights1( mesh.boundaryMesh()[outletID], lambdaY, 2);
+    const scalarListList& oW = outletWeights;
     
     Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz
             <<"   Y grading is "<< Gy <<nl<<nl;
@@ -387,44 +436,53 @@ int main(int argc, char *argv[])
     pointField savedPointsAll = mesh.points();
     
     const vectorField& wR = pointDispWall;
-    pointField mpW = mesh_rlx->doWallDisplacement(wR * runTime.deltaTValue() );
+    pointField mpW = mesh_rlx->doWallDisplacement( wR * runTime.deltaTValue() );
     mesh.movePoints( mpW);
     
     const vectorField& iR = pointDispInlet;
-    pointField mpI = mesh_rlx->doInletDisplacement(iR * runTime.deltaTValue());
+    pointField mpI = mesh_rlx->doInletDisplacement( iR * runTime.deltaTValue() );
     mesh.movePoints( mpI );
     
-    //const vectorField& oR = pointDispOutlet;
-    //pointField mpO = mesh_rlx->doOutletDisplacement(oR * runTime.deltaTValue());
-    //mesh.movePoints( mpO );
+    const vectorField& oR = pointDispOutlet;
+    pointField mpO = mesh_rlx->doOutletDisplacement( oR * runTime.deltaTValue() );
+    mesh.movePoints( mpO );
     
-    runTime.write();
-    runTime++;
+    //runTime.write();
+    //runTime++;
     
     Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
     vectorField wallRelax = mesh_rlx->wallRelaxation1( mesh.boundaryMesh()[wallID], wW, rlxTol);
     Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
-
-    Info<<"Relaxing inlet..."<<nl;
-    vectorField inlRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[inletID], iW, rlxTol);
-    Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
-
-    //Info<<"Relaxing outlet..."<<nl;
-    //vectorField outRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[outletID], oW, rlxTol);
-    //Info<<"Outlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
     
     
     mesh.movePoints( savedPointsAll );
     const vectorField wR1 = wallRelax/runTime.deltaTValue() + pointDispWall;
+    
+    vectorField vvff1 = wR1 * runTime.deltaTValue();
+    const vectorField &vvff = vvff1;
+    
+    
+    Info<<"Relaxing inlet..."<<nl;
+    vectorField inlRelax = mesh_rlx->wallRelaxation42( mesh.boundaryMesh()[inletID], iW, rlxTol, vvff);
+    Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
+
+    Info<<"Relaxing outlet..."<<nl;
+    //vectorField outRelax = mesh_rlx->wallRelaxation31( mesh.boundaryMesh()[outletID], oW, rlxTol, vvff);
+    vectorField outRelax = mesh_rlx->wallRelaxation43( mesh.boundaryMesh()[outletID], oW, rlxTol, vvff);
+    Info<<"Outlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
+    
+    /*
     pointField mpW1 = mesh_rlx->doWallDisplacement(wR1 * runTime.deltaTValue() );
     mesh.movePoints( mpW1 );
     runTime.write();
     runTime++;
-    const vectorField iR1 = inlRelax/runTime.deltaTValue() + pointDispInlet;
+    
+    const vectorField iR1 = inlRelax/runTime.deltaTValue(); // + pointDispInlet;
     pointField mpI1 = mesh_rlx->doInletDisplacement(iR1 * runTime.deltaTValue());
     mesh.movePoints( mpI1 );
     runTime.write();
     runTime++;
+     */
     /*
     const vectorField oR1 = outRelax/runTime.deltaTValue() + pointDispOutlet;
     pointField mpO1 = mesh_rlx->doOutletDisplacement(oR1 * runTime.deltaTValue());
@@ -432,23 +490,23 @@ int main(int argc, char *argv[])
     runTime.write();
     runTime++;
      */
-    std::exit(0);
+    //std::exit(0);
     
     
     mesh.movePoints( savedPointsAll );
 
-    //wallRelax /= runTime.deltaTValue();
-    //pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall;
+    wallRelax /= runTime.deltaTValue();
+    pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall;
 
     inlRelax /= runTime.deltaTValue();
+    //pointVelocity.boundaryField()[inletID] == inlRelax; // + pointDispInlet;
     pointVelocity.boundaryField()[inletID] == inlRelax + pointDispInlet;
     
-    //outRelax /= runTime.deltaTValue();
-    //pointVelocity.boundaryField()[outletID] == outRelax + pointDispOutlet;
+    outRelax /= runTime.deltaTValue();
+    pointVelocity.boundaryField()[outletID] == outRelax + pointDispOutlet;
     
     mesh.update();
 
-    
     //runTime.write();
     //runTime++;
     
