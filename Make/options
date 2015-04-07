@@ -9,9 +9,8 @@ EXE_INC = \
     -I$(LIB_SRC)/fvOptions/lnInclude \
     -I$(LIB_SRC)/sampling/lnInclude \
     -I$(LIB_SRC)/dynamicFvMesh/lnInclude \
-    -I$(WM_PROJECT_USER_DIR)/applications/libs/mixedSlipFixedValuePointPatchField/lnInclude \
-    -I$(WM_PROJECT_USER_DIR)/applications/libs/dissolControl/lnInclude \
-    -I$(WM_PROJECT_USER_DIR)/applications/libs/primitivePatchInterpolationSync
+    -I$(WM_PROJECT_USER_DIR)/applications/libs/steadyStateControl/lnInclude \
+    -I$(WM_PROJECT_USER_DIR)/applications/libs/coupledPatchInterpolation
 
 EXE_LIBS = \
     -lincompressibleTurbulenceModel \
@@ -24,7 +23,7 @@ EXE_LIBS = \
     -lsampling \
     -ldynamicFvMesh \
     -L$(FOAM_USER_LIBBIN) \
-    -ldissolControl \
+    -lsteadyStateControl \
     -lgsl \
     -lgslcblas
 
