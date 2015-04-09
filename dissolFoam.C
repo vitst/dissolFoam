@@ -113,6 +113,12 @@ int main(int argc, char *argv[])
     )
   );
 
+  bool dissolDebug
+  (
+    dissolProperties.lookupOrDefault<bool>("dissolDebug", false)
+  );
+  
+  
   bool fixInletConcentration
   (
     readBool( dissolProperties.lookup("fixInletConcentration") )
@@ -378,12 +384,9 @@ int main(int argc, char *argv[])
     
     scalarField pointCface = -C.boundaryField()[wallID].snGrad();
     vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
-    scalarField pointCvrtx = patchInterpolator.faceToPointInterpolate(pointCface);
-    vectorField pointNvrtx = patchInterpolator.faceToPointInterpolate(pointNface);
-    forAll(pointNvrtx, ii){
-      pointNvrtx[ii] = pointNvrtx[ii] / mag(pointNvrtx[ii]);
-    }
-    vectorField pointDispWall = pointCvrtx * pointNvrtx;
+    
+    vectorField motionVec = pointCface * pointNface;
+    vectorField pointDispWall = patchInterpolator.faceToPointInterpolate(motionVec);    
     
     vectorField& pdw = pointDispWall;
     
@@ -467,8 +470,10 @@ int main(int argc, char *argv[])
     pointField mpO = mesh_rlx->doOutletDisplacement( oR * runTime.deltaTValue() );
     mesh.movePoints( mpO );
     
-    //runTime.write();
-    //runTime++;
+    if( dissolDebug ){
+      runTime.write();
+      runTime++;
+    }
     
     Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
     //vectorField wallRelax = mesh_rlx->wallRelaxation12( mesh.boundaryMesh()[wallID], wW, rlxTol);
@@ -528,14 +533,15 @@ int main(int argc, char *argv[])
     
     mesh.update();
 
-    //runTime.write();
-    //runTime++;
-    
     Info<< "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
           << " s" << "  ClockTime = " << runTime.elapsedClockTime()
           << " s" << nl << nl;
     
-    //std::exit(0);
+    if( dissolDebug ){
+      runTime.write();
+      runTime++;
+      std::exit(0);
+    }
   
     run0timestep = true;
     Info<< "Process: Time = " << runTime.timeName() << nl << nl;

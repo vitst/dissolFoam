@@ -203,8 +203,8 @@ void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){
     scalar c2 = mag( cN2 );
     
     //scalar newC0 = extrapolateConcentrationLinear(boundaryPoints, c1, c2, currentTriple);
-    scalar newC0 = extrapolateConcentrationLinearZ(boundaryPoints, c1, c2, currentTriple);
-    //scalar newC0 = extrapolateConcentrationExpZ(boundaryPoints, c1, c2, currentTriple);
+    //scalar newC0 = extrapolateConcentrationLinearZ(boundaryPoints, c1, c2, currentTriple);
+    scalar newC0 = extrapolateConcentrationExpZ(boundaryPoints, c1, c2, currentTriple);
     
     concNorm[ currentTriple[0] ] = newC0 * cN0 / c0;
     

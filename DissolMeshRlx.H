@@ -209,7 +209,16 @@ public:
       
       boundaryPoints += finalDisplacement;
       
-      displ_tol = average( mag(finalDisplacement)/tol );
+      scalarField aux_f = mag(finalDisplacement)/tol;
+      scalarField aux_f0(finalDisplacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
       reduce(displ_tol, sumOp<scalar>());
       displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
       
@@ -350,7 +359,17 @@ public:
       
       boundaryPoints += finalDisplacement;
       
-      displ_tol = average( mag(finalDisplacement)/tol );
+
+      scalarField aux_f = mag(finalDisplacement)/tol;
+      scalarField aux_f0(finalDisplacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+
       reduce(displ_tol, sumOp<scalar>());
       displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
       
@@ -607,7 +626,17 @@ public:
       
       boundaryPoints += finalDisplacement;
       
-      displ_tol = average( mag(finalDisplacement)/tol );
+      
+      scalarField aux_f = mag(finalDisplacement)/tol;
+      scalarField aux_f0(finalDisplacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
       reduce(displ_tol, sumOp<scalar>());
       displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
       
@@ -957,7 +986,16 @@ public:
       
       boundaryPoints += finalDisplacement;
       
-      displ_tol = average( mag(finalDisplacement)/tol );
+      scalarField aux_f = mag(finalDisplacement)/tol;
+      scalarField aux_f0(finalDisplacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
       reduce(displ_tol, sumOp<scalar>());
       displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
       
@@ -1212,7 +1250,16 @@ public:
       
       boundaryPoints += finalDisplacement;
       
-      displ_tol = average( mag(finalDisplacement)/tol );
+      scalarField aux_f = mag(finalDisplacement)/tol;
+      scalarField aux_f0(finalDisplacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
       reduce(displ_tol, sumOp<scalar>());
       displ_tol = 100000 * displ_tol / static_cast<double>( Pstream::nProcs() );
       
@@ -1267,8 +1314,27 @@ public:
         }
       }
       
-      displ_tol = average( mag(newDisplacement - displacement) );
-      scalar displ_tol_norm = average( mag(newDisplacement) );
+      scalarField aux_f = mag(newDisplacement - displacement);
+      scalarField aux_f0(displacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
+      scalarField aux_fn = mag(newDisplacement);
+      scalarField aux_fn0(displacement.size(), 0.0);
+      scalar displ_tol_norm;
+      if( aux_fn == aux_fn0 ){
+        displ_tol_norm = 0.0;
+      }
+      else{
+        displ_tol_norm = average( aux_fn );
+      }
+      
+      
       reduce(displ_tol, sumOp<scalar>());
       reduce(displ_tol_norm, sumOp<scalar>());
       displ_tol /= displ_tol_norm;
@@ -1346,8 +1412,26 @@ public:
         }
       }
       
-      displ_tol = average( mag(newDisplacement - displacement) );
-      scalar displ_tol_norm = average( mag(newDisplacement) );
+      scalarField aux_f = mag(newDisplacement - displacement);
+      scalarField aux_f0(displacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
+      scalarField aux_fn = mag(newDisplacement);
+      scalarField aux_fn0(displacement.size(), 0.0);
+      scalar displ_tol_norm;
+      if( aux_fn == aux_fn0 ){
+        displ_tol_norm = 0.0;
+      }
+      else{
+        displ_tol_norm = average( aux_fn );
+      }
+      
       reduce(displ_tol, sumOp<scalar>());
       reduce(displ_tol_norm, sumOp<scalar>());
       displ_tol /= displ_tol_norm;
@@ -1446,8 +1530,26 @@ public:
         }
       }
       
-      displ_tol = average( mag(newDisplacement - displacement) );
-      scalar displ_tol_norm = average( mag(newDisplacement) );
+      scalarField aux_f = mag(newDisplacement - displacement);
+      scalarField aux_f0(displacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
+      scalarField aux_fn = mag(newDisplacement);
+      scalarField aux_fn0(displacement.size(), 0.0);
+      scalar displ_tol_norm;
+      if( aux_fn == aux_fn0 ){
+        displ_tol_norm = 0.0;
+      }
+      else{
+        displ_tol_norm = average( aux_fn );
+      }
+      
       reduce(displ_tol, sumOp<scalar>());
       reduce(displ_tol_norm, sumOp<scalar>());
       displ_tol /= displ_tol_norm;
@@ -1560,8 +1662,26 @@ public:
         }
       }
       
-      displ_tol = average( mag(newDisplacement - displacement) );
-      scalar displ_tol_norm = average( mag(newDisplacement) );
+      scalarField aux_f = mag(newDisplacement - displacement);
+      scalarField aux_f0(displacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
+      scalarField aux_fn = mag(newDisplacement);
+      scalarField aux_fn0(displacement.size(), 0.0);
+      scalar displ_tol_norm;
+      if( aux_fn == aux_fn0 ){
+        displ_tol_norm = 0.0;
+      }
+      else{
+        displ_tol_norm = average( aux_fn );
+      }
+      
       reduce(displ_tol, sumOp<scalar>());
       reduce(displ_tol_norm, sumOp<scalar>());
       displ_tol /= displ_tol_norm;
@@ -1679,8 +1799,26 @@ public:
         }
       }
       
-      displ_tol = average( mag(newDisplacement - displacement) );
-      scalar displ_tol_norm = average( mag(newDisplacement) );
+      scalarField aux_f = mag(newDisplacement - displacement);
+      scalarField aux_f0(displacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
+      scalarField aux_fn = mag(newDisplacement);
+      scalarField aux_fn0(displacement.size(), 0.0);
+      scalar displ_tol_norm;
+      if( aux_fn == aux_fn0 ){
+        displ_tol_norm = 0.0;
+      }
+      else{
+        displ_tol_norm = average( aux_fn );
+      }
+      
       reduce(displ_tol, sumOp<scalar>());
       reduce(displ_tol_norm, sumOp<scalar>());
       displ_tol /= displ_tol_norm;
@@ -1792,8 +1930,27 @@ public:
         }
       }
       
-      displ_tol = average( mag(newDisplacement - displacement) );
-      scalar displ_tol_norm = average( mag(newDisplacement) );
+      scalarField aux_f = mag(newDisplacement - displacement);
+      scalarField aux_f0(displacement.size(), 0.0);
+      
+      if( aux_f == aux_f0 ){
+        displ_tol = 0.0;
+      }
+      else{
+        displ_tol = average( aux_f );
+      }
+      
+      scalarField aux_fn = mag(newDisplacement);
+      scalarField aux_fn0(displacement.size(), 0.0);
+      scalar displ_tol_norm;
+      if( aux_fn == aux_fn0 ){
+        displ_tol_norm = 0.0;
+      }
+      else{
+        displ_tol_norm = average( aux_fn );
+      }
+      
+      
       reduce(displ_tol, sumOp<scalar>());
       reduce(displ_tol_norm, sumOp<scalar>());
       displ_tol /= displ_tol_norm;
