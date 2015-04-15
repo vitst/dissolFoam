@@ -498,20 +498,11 @@ public:
 
 
 
-
-
-
-
-
-
-
-
   template<class Patch>
-  vectorField wallRelaxationInletEdge(Patch& patch_, double rlxTol){
-    pointField saveBoundaryPoints = patch_.localPoints();
-
+  vectorField edgeRelaxation(Patch& patchIO_, double rlxTol){
+    
+    Patch& patch_ = mesh_.boundaryMesh()[wallID];
     const List<face>& llf = patch_.localFaces();
-    const labelList& meshPoints = patch_.meshPoints();
     const labelListList& plistFaces = patch_.pointFaces();
 
     pointField boundaryPoints = patch_.localPoints();
@@ -522,159 +513,47 @@ public:
     
     vectorField globalDisplacement(N, vector::zero);
     
+    const labelList& meshPoints = patchIO_.meshPoints();
+    const labelList& wallsTo  = patch_.meshPoints();
+    labelList local_wall_WallEdges;
+    labelList global_WallEdges;
+    forAll(wallsTo, i){
+      label lW = wallsTo[i];
+
+      label inlind = findIndex(meshPoints, lW);
+      if( inlind != -1){
+        local_wall_WallEdges.append( i );
+        global_WallEdges.append( lW );
+      }
+    }
+    
     // relax edges
-    // inlet
-    label NN = local_wall_WallsInletEdges.size();
-    labelList ne(NN, -1);
+    label NN = local_wall_WallEdges.size();
     labelListList nepe;
-    forAll(local_wall_WallsInletEdges, i){
-      label ind = local_wall_WallsInletEdges[i];
+    forAll(local_wall_WallEdges, i){
+      label ind = local_wall_WallEdges[i];
 
       const labelList& lll = ppp[ind];
       labelList nel;
-      
-      
       forAll(lll, ii){
         const edge& ed = ee[ lll[ii] ];
         label edb = ed.start();
         
-        if( edb!=ind && findIndex(local_wall_WallsInletEdges, edb) != -1 ){
+        if( edb!=ind && findIndex(local_wall_WallEdges, edb) != -1 ){
           nel.append(edb);
         }
         
         label ede = ed.end();
-        if( ede!=ind && findIndex(local_wall_WallsInletEdges, ede) != -1){
+        if( ede!=ind && findIndex(local_wall_WallEdges, ede) != -1){
           nel.append(ede);
         }
       }
       nepe.append(nel);
     }
     
-    Info<<boundaryPoints.size()<<"    "<<nepe<<nl<<nl;
-    
-    
     double displ_tol = 1.0;
     int itt = 0;
     while(displ_tol>rlxTol){
-      pointField maxNeib(NN, vector::zero);
-      vectorField minNeib(NN, vector::zero);
-      forAll(nepe, i){
-        label  curI = local_wall_WallsInletEdges[i];
-        point& curP = boundaryPoints[curI];
-        const labelList& pNeib = nepe[i];
-        point& neibP0 = boundaryPoints[pNeib[0]];
-        vector d1 = curP - neibP0;
-        maxNeib[i] = d1;
-        minNeib[i] = d1;
-        forAll(pNeib, ii){
-          point& neibP = boundaryPoints[pNeib[ii]];
-          vector d2 = curP - neibP;
-
-          if( mag(maxNeib[i])>mag(d2) ){
-            maxNeib[i] = d2;
-          }
-          if( mag(minNeib[i])<=mag(d2) ){
-            minNeib[i] = d2;
-          }
-        }
-      }
-
-      syncTools::syncPointList(mesh_, global_WallInletEdges, maxNeib, maxEqOp<vector>(), vector::zero);
-      syncTools::syncPointList(mesh_, global_WallInletEdges, minNeib, minEqOp<vector>(), vector::zero);
-
-
-      vectorField displacement(NN, vector::zero);
-      scalarField tol(NN, 0.0);
-      forAll(local_wall_WallsInletEdges, i){
-        label ind = local_wall_WallsInletEdges[i];
-        displacement[i] = vertexDispl1(maxNeib[i], minNeib[i]);
-        boundaryPoints[ind] -= displacement[i];
-        tol[i] = mag(maxNeib[i]) + mag(minNeib[i]);
-      }
-      
-      scalarField aux_f = mag(displacement)/tol;
-      scalarField aux_f0(NN, 0.0);
-
-      if( aux_f == aux_f0 ){
-        displ_tol = 0.0;
-      }
-      else{
-        displ_tol = average( aux_f );
-      }
-
-      reduce(displ_tol, sumOp<scalar>());
-      displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
-      
-      if(itt%1==0){
-        Info<<patch_.name()<<"  rlx iter "<<itt
-                <<"  tolerance: "<<displ_tol<< nl;
-      }
-      
-      itt+=1;
-      
-      //if(itt==10) break;
-      
-    }
-    
-    forAll(globalDisplacement, i){
-      globalDisplacement[i] = patch_.localPoints()[i]-boundaryPoints[i];
-    }
-    
-    return globalDisplacement;
-  }
-
-  
-  template<class Patch>
-  vectorField wallRelaxationInletEdge1(Patch& patch_, double rlxTol){
-    pointField saveBoundaryPoints = patch_.localPoints();
-
-    const List<face>& llf = patch_.localFaces();
-    const labelList& meshPoints = patch_.meshPoints();
-    const labelListList& plistFaces = patch_.pointFaces();
-
-    pointField boundaryPoints = patch_.localPoints();
-    int N = boundaryPoints.size();
-    
-    const labelListList& ppp = patch_.pointEdges();
-    const edgeList& ee = patch_.edges();
-    
-    vectorField globalDisplacement(N, vector::zero);
-    
-    // relax edges
-    // inlet
-    label NN = local_wall_WallsInletEdges.size();
-    labelList ne(NN, -1);
-    labelListList nepe;
-    forAll(local_wall_WallsInletEdges, i){
-      label ind = local_wall_WallsInletEdges[i];
-
-      const labelList& lll = ppp[ind];
-      labelList nel;
-      
-      
-      forAll(lll, ii){
-        const edge& ed = ee[ lll[ii] ];
-        label edb = ed.start();
-        
-        if( edb!=ind && findIndex(local_wall_WallsInletEdges, edb) != -1 ){
-          nel.append(edb);
-        }
-        
-        label ede = ed.end();
-        if( ede!=ind && findIndex(local_wall_WallsInletEdges, ede) != -1){
-          nel.append(ede);
-        }
-      }
-      nepe.append(nel);
-    }
-    
-    //Info<<boundaryPoints.size()<<"    "<<nepe<<nl<<nl;
-    
-    
-    double displ_tol = 1.0;
-    int itt = 0;
-    while(displ_tol>rlxTol){
-      
       pointField faceCs = faceCentres(boundaryPoints, llf);
       vectorField faceNs = faceNormals(boundaryPoints, llf);
       
@@ -684,7 +563,7 @@ public:
       scalarList sumWeights( NN, 0.0 );
       scalarList faceToPointSumWeights( NN, 0.0 );
       forAll(nepe, i){
-        label  curI = local_wall_WallsInletEdges[i];
+        label  curI = local_wall_WallEdges[i];
         point& curP = boundaryPoints[curI];
         const labelList& pNeib = nepe[i];
         
@@ -695,21 +574,15 @@ public:
           vector d2 = neibP - curP;
 
           scalar mag_d = mag(d2);
+          scalar nw = 1.0 / mag_d;
           
           vector disp;
-          disp.x() = d2.x();// * 0.5;
-          disp.y() = d2.y();// * 0.5;
+          disp.x() = d2.x() * nw;
+          disp.y() = d2.y() * nw;
           disp.z() = 0.0;
           displacement[i] += disp;
-          
-          tol[i] += mag_d; // * pw[j];
-          
-          // this is for normal
-          scalar nw = 1.0 / mag_d;
-          //pointNorm[i] += nz ^ (d2*nw);
-          //pointNorm[i] += nw * faceNs[ faceI ];
-          //sumWeights[i] += nw;
-          sumWeights[i] += 1.0;
+          tol[i] += mag_d;
+          sumWeights[i] += nw;
         }
         
         const labelList& pFaces = plistFaces[curI];
@@ -727,11 +600,11 @@ public:
         }
       }
 
-      syncTools::syncPointList(mesh_, global_WallInletEdges, displacement, plusEqOp<vector>(), vector::zero);
-      syncTools::syncPointList(mesh_, global_WallInletEdges, tol, plusEqOp<scalar>(), 0.0);
-      syncTools::syncPointList(mesh_, global_WallInletEdges, sumWeights, plusEqOp<scalar>(), 0.0);
-      syncTools::syncPointList(mesh_, global_WallInletEdges, pointNorm, plusEqOp<vector>(), vector::zero);
-      syncTools::syncPointList(mesh_, global_WallInletEdges, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
+      syncTools::syncPointList(mesh_, global_WallEdges, displacement, plusEqOp<vector>(), vector::zero);
+      syncTools::syncPointList(mesh_, global_WallEdges, tol, plusEqOp<scalar>(), 0.0);
+      syncTools::syncPointList(mesh_, global_WallEdges, sumWeights, plusEqOp<scalar>(), 0.0);
+      syncTools::syncPointList(mesh_, global_WallEdges, pointNorm, plusEqOp<vector>(), vector::zero);
+      syncTools::syncPointList(mesh_, global_WallEdges, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
       // normalization
       forAll(pointNorm, i){
         displacement[i] /= sumWeights[i];
@@ -740,8 +613,8 @@ public:
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
-      forAll(local_wall_WallsInletEdges, i){
-        label ind = local_wall_WallsInletEdges[i];
+      forAll(local_wall_WallEdges, i){
+        label ind = local_wall_WallEdges[i];
         boundaryPoints[ind] += 0.75*projectedDisplacement[i];
       }
       
@@ -1204,7 +1077,6 @@ public:
     const edgeList& ee = patch_.edges();
     
     const labelList& wallsTo  = mesh_.boundaryMesh()[wallID].meshPoints();
-    
     labelList local_wall_WallEdges;
     labelList global_WallEdges;
     forAll(wallsTo, i){

@@ -477,10 +477,17 @@ int main(int argc, char *argv[])
     
     
     Info<<"Relaxing inlet-wall edge..."<<nl;
-    vectorField wiEdgeRlx = mesh_rlx->wallRelaxationInletEdge1( mesh.boundaryMesh()[wallID], rlxTol);
-    const vectorField& wer = wiEdgeRlx;
-    pointField mpWIE = mesh_rlx->doWallDisplacement( wer );
+    vectorField wiEdgeRlx = mesh_rlx->edgeRelaxation( mesh.boundaryMesh()[inletID], rlxTol);
+    const vectorField& werI = wiEdgeRlx;
+    pointField mpWIE = mesh_rlx->doWallDisplacement( werI );
     mesh.movePoints( mpWIE );
+    
+    Info<<"Relaxing outlet-wall edge..."<<nl;
+    vectorField woEdgeRlx = mesh_rlx->edgeRelaxation( mesh.boundaryMesh()[outletID], rlxTol);
+    const vectorField& werO = woEdgeRlx;
+    pointField mpWOE = mesh_rlx->doWallDisplacement( werO );
+    mesh.movePoints( mpWOE );
+    
 
     Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
     //vectorField wallRelax = mesh_rlx->wallRelaxation12( mesh.boundaryMesh()[wallID], wW, rlxTol);
