@@ -475,11 +475,17 @@ int main(int argc, char *argv[])
       runTime++;
     }
     
+    
+    Info<<"Relaxing inlet-wall edge..."<<nl;
+    vectorField wiEdgeRlx = mesh_rlx->wallRelaxationInletEdge1( mesh.boundaryMesh()[wallID], rlxTol);
+    const vectorField& wer = wiEdgeRlx;
+    pointField mpWIE = mesh_rlx->doWallDisplacement( wer );
+    mesh.movePoints( mpWIE );
+
     Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
     //vectorField wallRelax = mesh_rlx->wallRelaxation12( mesh.boundaryMesh()[wallID], wW, rlxTol);
     vectorField wallRelax = mesh_rlx->wallRelaxation11( mesh.boundaryMesh()[wallID], wW, rlxTol);
     Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
-    
     
     mesh.movePoints( savedPointsAll );
     const vectorField wR1 = wallRelax/runTime.deltaTValue() + pointDispWall;
@@ -493,8 +499,7 @@ int main(int argc, char *argv[])
     Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
 
     Info<<"Relaxing outlet..."<<nl;
-    //vectorField outRelax = mesh_rlx->wallRelaxation31( mesh.boundaryMesh()[outletID], oW, rlxTol, vvff);
-    vectorField outRelax = mesh_rlx->wallRelaxation43( mesh.boundaryMesh()[outletID], oW, rlxTol, vvff);
+    vectorField outRelax = mesh_rlx->wallRelaxation42( mesh.boundaryMesh()[outletID], oW, rlxTol, vvff);
     Info<<"Outlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
     
     /*

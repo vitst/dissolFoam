@@ -44,6 +44,46 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
   //std::exit(0);
 }
 
+
+/*#######################################################################################
+ *  * the relaxation on the edge in order to keep uniform distribution
+ *  * A0 - central point
+ *  * A1, A2 - neighbors
+ *#######################################################################################*/
+vector DissolMeshRlx::vertexDispl( point A0, point A1, point A2 ){
+  vector d1  = A1 - A0;
+  vector d2  = A2 - A0;
+  vector d12 = A1 - A2;
+  scalar b   = (d1+d2) & d12;
+  scalar a   = fabs(b)/((d12 & d12) + fabs(b));
+  
+  scalar alpha = 0.5;
+  
+  vector r0;
+  if (b > 0)
+    r0 = alpha * a*d1;
+  else
+    r0 = alpha * a*d2;
+  return r0;
+}
+
+vector DissolMeshRlx::vertexDispl1( vector r1, vector r2 ){
+  vector r12 = r1 - r2;
+  scalar b   = (r1+r2) & r12;
+  scalar a   = fabs(b)/((r12 & r12) + fabs(b));
+  
+  scalar alpha = 0.5;
+  
+  vector r0;
+  if (b > 0)
+    r0 = alpha * a*r1;
+  else
+    r0 = alpha * a*r2;
+  return r0;
+}
+
+
+
 // ++
 Foam::pointField DissolMeshRlx::faceCentres(const pointField& points, const List<face>& flist) const
 {
