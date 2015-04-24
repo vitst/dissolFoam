@@ -61,6 +61,7 @@ private:
   // it fixes inlet boundary condition inconsistance
   std::map<int, std::pair<int, int> > edgeConcentrationFixMap;
 
+  vector extrapolateVectorLinear(const pointField&, vector&, vector&, const labelList&);
   
   scalar extrapolateConcentrationExp(const pointField&, scalar&, scalar&, const labelList&);
   scalar extrapolateConcentrationExpZ(const pointField&, scalar&, scalar&, const labelList&);
@@ -99,8 +100,7 @@ public:
   pointField doWallDisplacement(const vectorField&);
   pointField doOutletDisplacement(const vectorField&);
   
-  vector vertexDispl( point A0, point A1, point A2 );
-  vector vertexDispl1( vector r1, vector r2 );
+  scalarField distanceToTheEdge();
   
   template<class Patch>
   vectorField wallRelaxation(Patch& patch_, const scalarListList& weights, double rlxTol){
@@ -562,11 +562,13 @@ public:
       vectorField pointNorm( NN, vector::zero );
       scalarList sumWeights( NN, 0.0 );
       scalarList faceToPointSumWeights( NN, 0.0 );
+      
+      
+      
       forAll(nepe, i){
         label  curI = local_wall_WallEdges[i];
         point& curP = boundaryPoints[curI];
         const labelList& pNeib = nepe[i];
-        
         
         forAll(pNeib, ii){
           label ind = pNeib[ii];
@@ -577,12 +579,13 @@ public:
           scalar nw = 1.0 / mag_d;
           
           vector disp;
-          disp.x() = d2.x() * nw;
-          disp.y() = d2.y() * nw;
+          disp.x() = d2.x(); // * nw; // it is for the future
+          disp.y() = d2.y(); // * nw;
           disp.z() = 0.0;
           displacement[i] += disp;
           tol[i] += mag_d;
-          sumWeights[i] += nw;
+          sumWeights[i] += 1;
+          //sumWeights[i] += nw;
         }
         
         const labelList& pFaces = plistFaces[curI];
@@ -598,8 +601,9 @@ public:
           pointNorm[i].z()=0;
           faceToPointSumWeights[i] += nw;
         }
+        
       }
-
+      
       syncTools::syncPointList(mesh_, global_WallEdges, displacement, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, global_WallEdges, tol, plusEqOp<scalar>(), 0.0);
       syncTools::syncPointList(mesh_, global_WallEdges, sumWeights, plusEqOp<scalar>(), 0.0);
@@ -615,7 +619,7 @@ public:
       
       forAll(local_wall_WallEdges, i){
         label ind = local_wall_WallEdges[i];
-        boundaryPoints[ind] += 0.75*projectedDisplacement[i];
+        boundaryPoints[ind] += 0.25*projectedDisplacement[i];
       }
       
       scalarField aux_f = mag(projectedDisplacement)/tol;
@@ -798,9 +802,9 @@ public:
       }
       */
       
-      //scalar factor = 1;
-      scalar factor = 5.5;
-      if(itt%2==0) factor = 1.17;
+      scalar factor = 1;
+      //scalar factor = 5.5;
+      //if(itt%2==0) factor = 1.17;
       vectorField finalDisplacement = factor * projectedDisplacement;
       
       boundaryPoints += finalDisplacement;

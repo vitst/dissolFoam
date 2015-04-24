@@ -44,44 +44,26 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
   //std::exit(0);
 }
 
-
-/*#######################################################################################
- *  * the relaxation on the edge in order to keep uniform distribution
- *  * A0 - central point
- *  * A1, A2 - neighbors
- *#######################################################################################*/
-vector DissolMeshRlx::vertexDispl( point A0, point A1, point A2 ){
-  vector d1  = A1 - A0;
-  vector d2  = A2 - A0;
-  vector d12 = A1 - A2;
-  scalar b   = (d1+d2) & d12;
-  scalar a   = fabs(b)/((d12 & d12) + fabs(b));
+scalarField DissolMeshRlx::distanceToTheEdge(){
+  pointField ppoints = mesh_.boundaryMesh()[inletID].localPoints();
+  pointField pfaces = mesh_.boundaryMesh()[inletID].faceCentres();
   
-  scalar alpha = 0.5;
+  scalarField distance( pfaces.size(), 0.0 );
   
-  vector r0;
-  if (b > 0)
-    r0 = alpha * a*d1;
-  else
-    r0 = alpha * a*d2;
-  return r0;
+  forAll(pfaces, fi){
+    point& curF = pfaces[fi];
+    
+    scalarField alld( local_inlet_WallsInletEdges.size(), 0.0 );
+    forAll(local_inlet_WallsInletEdges, pi){
+      point& curP = ppoints[local_inlet_WallsInletEdges[pi]];
+      alld[pi] = mag( curF-curP );
+    }
+    
+    distance[fi] = min( alld );
+  }
+  
+  return distance;
 }
-
-vector DissolMeshRlx::vertexDispl1( vector r1, vector r2 ){
-  vector r12 = r1 - r2;
-  scalar b   = (r1+r2) & r12;
-  scalar a   = fabs(b)/((r12 & r12) + fabs(b));
-  
-  scalar alpha = 0.5;
-  
-  vector r0;
-  if (b > 0)
-    r0 = alpha * a*r1;
-  else
-    r0 = alpha * a*r2;
-  return r0;
-}
-
 
 
 // ++
@@ -243,10 +225,14 @@ void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){
     scalar c2 = mag( cN2 );
     
     //scalar newC0 = extrapolateConcentrationLinear(boundaryPoints, c1, c2, currentTriple);
+    scalar newC0 = extrapolateConcentrationExp(boundaryPoints, c1, c2, currentTriple);
     //scalar newC0 = extrapolateConcentrationLinearZ(boundaryPoints, c1, c2, currentTriple);
-    scalar newC0 = extrapolateConcentrationExpZ(boundaryPoints, c1, c2, currentTriple);
+    //scalar newC0 = extrapolateConcentrationExpZ(boundaryPoints, c1, c2, currentTriple);
+    vector newN0 = extrapolateVectorLinear(boundaryPoints, cN1, cN2, currentTriple);
+    newN0 /= mag(newN0);
     
-    concNorm[ currentTriple[0] ] = newC0 * cN0 / c0;
+    concNorm[ currentTriple[0] ] = newC0 * newN0;
+    //concNorm[ currentTriple[0] ] = newC0 * cN0 / c0;
     
     //Pout << (cN0 / c0) << "   c0: "<< c0 << "     new: "<< newC0 << nl;
   }
@@ -281,6 +267,16 @@ scalar DissolMeshRlx::extrapolateConcentrationLinear(const pointField& loc_point
 
   return c2 - (c2-c1) * r02/r12;
 }
+
+vector DissolMeshRlx::extrapolateVectorLinear(const pointField& loc_points,
+                                vector& r1, vector& r2, 
+                                const labelList& pnt){
+  scalar r02 = mag(  loc_points[pnt[0]] - loc_points[pnt[2]]  );
+  scalar r12 = mag(  loc_points[pnt[1]] - loc_points[pnt[2]]  );
+
+  return r2 - (r2-r1) * r02/r12;
+}
+
 
 scalar DissolMeshRlx::extrapolateConcentrationLinearZ(const pointField& loc_points,
                                 scalar& c1, scalar& c2, 

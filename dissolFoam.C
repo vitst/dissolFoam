@@ -118,12 +118,18 @@ int main(int argc, char *argv[])
     dissolProperties.lookupOrDefault<bool>("dissolDebug", false)
   );
   
-  
   bool fixInletConcentration
   (
     readBool( dissolProperties.lookup("fixInletConcentration") )
   );
+
   
+  word newInletConcentration
+  (
+    dissolProperties.lookupOrDefault<word>("newInletConcentration", "none")
+  );
+  
+  /*
   bool cInletHypergeometric
   (
     dissolProperties.lookupOrDefault<bool>("hypergeometric", false)
@@ -132,6 +138,7 @@ int main(int argc, char *argv[])
   (
     dissolProperties.lookupOrDefault<bool>("modifyInletC", false)
   );
+  */
   
   scalar rlxTol( dissolProperties.lookupOrDefault<scalar>("relaxationTolerance", 0.1) );
   
@@ -153,8 +160,6 @@ int main(int argc, char *argv[])
   Info << "dissolFoamDict, timeCoefY:  " << timeCoefY <<nl;
   Info << "dissolFoamDict, numberOfCellsY:  " << Ny <<nl;
   Info << "*****************************************************************"<<nl;
-  
-  //interpolationTable<scalar> sherwoodNumTab ("Sh.dat");
   
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
@@ -212,9 +217,8 @@ int main(int argc, char *argv[])
       }
       
       // ***************************************************************************
-      
-      if(modifyInletC){
-      
+      if(newInletConcentration=="parabolic"||newInletConcentration=="hypergeometric" ){
+        
         labelHashSet includePatches(1);
         includePatches.insert(wallID);
         triSurface wallTriSurface
@@ -227,6 +231,8 @@ int main(int argc, char *argv[])
 
         pointField pointFaceCntr = mesh.boundaryMesh()[inletID].faceCentres();
         scalarField Cinlet( pointFaceCntr.size() );
+        
+        interpolationTable<scalar> sherwoodNumTab ("Sh.dat");
 
         scalar lp = 0.5;
 
@@ -273,12 +279,12 @@ int main(int argc, char *argv[])
           if(h == 0.0){
             Info<<"h=0  "<< p << "   "<< min(mesh.boundaryMesh()[wallID].localPoints().component(vector::Z))<<nl;
           }
-
-          if( cInletHypergeometric ){
+        
+          if( newInletConcentration == "hypergeometric" ){
             // the concentration profile based on Hypergeometric function
-            scalar Sh = 8.0;
+            //scalar Sh = 8.0;
             scalar G = 2*h/lp;
-            //scalar Sh = sherwoodNumTab( Foam::log10(G) );
+            scalar Sh = sherwoodNumTab( Foam::log10(G) );
             scalar lam = Sh / (G+Sh);
             scalar r  = Foam::sqrt( 3*G*lam/8 );
             scalar yh = (p.y() + h/2.) / h;
@@ -303,10 +309,32 @@ int main(int argc, char *argv[])
 
         C.boundaryField()[inletID] == Cinlet;
       }
-       
+        
+      if(newInletConcentration=="distanceFunction" ){
+        scalarField ddist = mesh_rlx->distanceToTheEdge();
+        
+        scalar lp = 0.5;
+        scalarField newC(ddist.size(), 0.0);
+        forAll(newC, ii){
+          newC[ii] = 1-Foam::exp(-ddist[ii]/lp);
+        }
+        
+        scalar totArea = 0.0;
+        scalar totCArea = 0.0;
+        forAll(newC, facei){
+          totArea += phi.boundaryField()[inletID][facei];
+          totCArea += newC[facei] * phi.boundaryField()[inletID][facei];
+        }
+        
+        scalar corrF = 0.0;
+        if(totCArea!=0.0){
+          corrF = totArea/totCArea;
+        }
+        
+        C.boundaryField()[inletID]==corrF*newC;
+      }
       // ***************************************************************************
       
-
       /*############################################
       *   Steady-state convection-diffusion solver
       * ##########################################*/
@@ -386,9 +414,21 @@ int main(int argc, char *argv[])
     vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
     
     vectorField motionVec = pointCface * pointNface;
-    vectorField pointDispWall = patchInterpolator.faceToPointInterpolate(motionVec);    
+    vectorField pointDispWall = patchInterpolator.faceToPointInterpolate(motionVec);
+    
+    /*
+    scalarField motionC = patchInterpolator.faceToPointInterpolate(pointCface);
+    vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
+    forAll(motionN, ii){
+      motionN[ii]/=mag(motionN[ii]);
+    }
+    vectorField pointDispWall = motionC*motionN;
+    */
     
     vectorField& pdw = pointDispWall;
+    
+    //mesh_rlx->fixEdgeConcentration();
+    //std::exit(0);
     
     if(fixInletConcentration){
       Info << "Fix concentration on the edge between walls and inlet"<< nl;
@@ -495,7 +535,10 @@ int main(int argc, char *argv[])
     Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
     
     mesh.movePoints( savedPointsAll );
-    const vectorField wR1 = wallRelax/runTime.deltaTValue() + pointDispWall;
+    const vectorField wR1 = wallRelax/runTime.deltaTValue() 
+            + wiEdgeRlx/runTime.deltaTValue()
+            + woEdgeRlx/runTime.deltaTValue()
+            + pointDispWall;
     
     vectorField vvff1 = wR1 * runTime.deltaTValue();
     const vectorField &vvff = vvff1;
@@ -533,8 +576,10 @@ int main(int argc, char *argv[])
     
     mesh.movePoints( savedPointsAll );
 
+    wiEdgeRlx /= runTime.deltaTValue();
+    woEdgeRlx /= runTime.deltaTValue();
     wallRelax /= runTime.deltaTValue();
-    pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall;
+    pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall + wiEdgeRlx + woEdgeRlx;
 
     inlRelax /= runTime.deltaTValue();
     //pointVelocity.boundaryField()[inletID] == inlRelax; // + pointDispInlet;
