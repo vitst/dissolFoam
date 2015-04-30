@@ -100,7 +100,8 @@ public:
   pointField doWallDisplacement(const vectorField&);
   pointField doOutletDisplacement(const vectorField&);
   
-  scalarField distanceToTheEdge();
+  scalarField distanceToTheEdge(vectorField&);
+  vectorField normalsOnTheEdge();
   
   template<class Patch>
   vectorField wallRelaxation(Patch& patch_, const scalarListList& weights, double rlxTol){
@@ -708,6 +709,7 @@ public:
           disp.x() = d.x() * 0.25;
           disp.y() = d.y() * 0.25;
           disp.z() = d.z() * pw[j];
+	  //disp = d * pw[j];
           displacement[i] += disp;
           
           tol[i] += mag_d * pw[j];
@@ -802,7 +804,7 @@ public:
       }
       */
       
-      scalar factor = 1;
+      scalar factor = 1.0;
       //scalar factor = 5.5;
       //if(itt%2==0) factor = 1.17;
       vectorField finalDisplacement = factor * projectedDisplacement;
@@ -829,11 +831,11 @@ public:
       
       itt+=1;
       
-      /*
-      if(itt%16000==0){
+      
+      if(itt%500==0){
         break;
       }
-      */
+      
       
     }
     Info<< patch_.name() << "  converged in "<< itt 

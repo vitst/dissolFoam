@@ -44,7 +44,49 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
   //std::exit(0);
 }
 
-scalarField DissolMeshRlx::distanceToTheEdge(){
+vectorField DissolMeshRlx::normalsOnTheEdge(){
+
+  const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();
+  pointField boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();
+  label NN = local_wall_WallsInletEdges.size();
+
+  const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
+
+  pointField faceCs = faceCentres(boundaryPoints, llf);
+  vectorField faceNs = faceNormals(boundaryPoints, llf);
+
+  vectorField pointNorm( NN, vector::zero );
+  scalarList faceToPointSumWeights( NN, 0.0 );
+  
+
+  forAll(local_wall_WallsInletEdges, i){
+    label  curI = local_wall_WallsInletEdges[i];
+    point& curP = boundaryPoints[curI];
+        
+    const labelList& pFaces = plistFaces[curI];
+    forAll(pFaces, j){
+      label faceI = pFaces[j];
+      point& faceC = faceCs[faceI];
+      vector d = faceC - curP;
+      scalar mag_d = mag(d);
+          
+      // this is for normal
+      scalar nw = 1.0 / mag_d;
+      pointNorm[i] += nw * faceNs[ faceI ];
+      pointNorm[i].z()=0;
+      faceToPointSumWeights[i] += nw;
+    }
+  }
+  syncTools::syncPointList(mesh_, global_WallInletEdges, pointNorm, plusEqOp<vector>(), vector::zero);
+  syncTools::syncPointList(mesh_, global_WallInletEdges, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
+  forAll(pointNorm, i){
+    pointNorm[i] /= mag( pointNorm[i] );
+  }
+
+  return pointNorm;
+}
+
+scalarField DissolMeshRlx::distanceToTheEdge(vectorField& nn){
   pointField ppoints = mesh_.boundaryMesh()[inletID].localPoints();
   pointField pfaces = mesh_.boundaryMesh()[inletID].faceCentres();
   
@@ -54,12 +96,26 @@ scalarField DissolMeshRlx::distanceToTheEdge(){
     point& curF = pfaces[fi];
     
     scalarField alld( local_inlet_WallsInletEdges.size(), 0.0 );
+    vectorField allvec( local_inlet_WallsInletEdges.size(), vector::zero );
     forAll(local_inlet_WallsInletEdges, pi){
       point& curP = ppoints[local_inlet_WallsInletEdges[pi]];
-      alld[pi] = mag( curF-curP );
+      vector dd = curF-curP;
+
+      //alld[pi] = mag( curF-curP );
+      //alld[pi] = mag( dd ^ nn[pi]);
+      //alld[pi] = mag( dd );
+      alld[pi] = mag(dd);
+      allvec[pi] = dd;
+
+      //alld[pi] = std::abs( mag( dd & nn[pi]) );
     }
-    
-    distance[fi] = min( alld );
+    //distance[fi] = min( alld );
+
+
+    label minid = findMin( alld );  
+    distance[fi] = mag( allvec[minid] & nn[minid] );
+
+
   }
   
   return distance;
@@ -225,14 +281,14 @@ void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){
     scalar c2 = mag( cN2 );
     
     //scalar newC0 = extrapolateConcentrationLinear(boundaryPoints, c1, c2, currentTriple);
-    scalar newC0 = extrapolateConcentrationExp(boundaryPoints, c1, c2, currentTriple);
-    //scalar newC0 = extrapolateConcentrationLinearZ(boundaryPoints, c1, c2, currentTriple);
+    //scalar newC0 = extrapolateConcentrationExp(boundaryPoints, c1, c2, currentTriple);
+    scalar newC0 = extrapolateConcentrationLinearZ(boundaryPoints, c1, c2, currentTriple);
     //scalar newC0 = extrapolateConcentrationExpZ(boundaryPoints, c1, c2, currentTriple);
     vector newN0 = extrapolateVectorLinear(boundaryPoints, cN1, cN2, currentTriple);
     newN0 /= mag(newN0);
     
-    concNorm[ currentTriple[0] ] = newC0 * newN0;
-    //concNorm[ currentTriple[0] ] = newC0 * cN0 / c0;
+    //concNorm[ currentTriple[0] ] = newC0 * newN0;
+    concNorm[ currentTriple[0] ] = newC0 * cN0 / c0;
     
     //Pout << (cN0 / c0) << "   c0: "<< c0 << "     new: "<< newC0 << nl;
   }

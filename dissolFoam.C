@@ -185,7 +185,14 @@ int main(int argc, char *argv[])
     //scalarListList wallWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ, 3);
     const scalarListList& wW = wallWeights;
     */
-    
+
+	const surfaceScalarField& magSf1 = mesh.magSf();
+	scalar areaCoef0 = 0.0;
+        forAll(magSf1.boundaryField()[inletID], facei){
+          areaCoef0 += magSf1.boundaryField()[inletID][facei];
+        }
+	reduce(areaCoef0, maxOp<scalar>());
+ 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
   /*
@@ -311,14 +318,29 @@ int main(int argc, char *argv[])
       }
         
       if(newInletConcentration=="distanceFunction" ){
-        scalarField ddist = mesh_rlx->distanceToTheEdge();
+        vectorField ndist = mesh_rlx->normalsOnTheEdge();
+        scalarField ddist = mesh_rlx->distanceToTheEdge(ndist);
         
+	const surfaceScalarField& magSf = mesh.magSf();
+	scalar areaCoef = 0.0;
+        forAll(ddist, facei){
+          areaCoef += magSf.boundaryField()[inletID][facei];
+        }
+	//areaCoef = Foam::sqrt(areaCoef);
+	areaCoef /= areaCoef0;
+	//areaCoef = 1.0 ;
+
+        //scalar lp = 1.025;
         scalar lp = 0.5;
         scalarField newC(ddist.size(), 0.0);
         forAll(newC, ii){
-          newC[ii] = 1-Foam::exp(-ddist[ii]/lp);
+          //newC[ii] = Foam::exp(ddist[ii]/lp/areaCoef);
+          //newC[ii] = 1 + 1-Foam::exp(-ddist[ii]/lp/areaCoef);
+          newC[ii] = 1.0/areaCoef + 1-Foam::exp(-ddist[ii]/lp/areaCoef);
+	  //Info<<ii<<"  "<<ddist[ii]<<"  "<<newC[ii]<<"  "<<nl;
         }
-        
+	//Info<<"areaCoef:   "<<areaCoef<<nl;
+	//std::exit(0); 
         scalar totArea = 0.0;
         scalar totCArea = 0.0;
         forAll(newC, facei){
@@ -333,7 +355,7 @@ int main(int argc, char *argv[])
         
         C.boundaryField()[inletID]==corrF*newC;
       }
-      
+
       // ***************************************************************************
       
       /*############################################
@@ -414,17 +436,19 @@ int main(int argc, char *argv[])
     scalarField pointCface = -C.boundaryField()[wallID].snGrad();
     vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
     
+    /*
     vectorField motionVec = pointCface * pointNface;
     vectorField pointDispWall = patchInterpolator.faceToPointInterpolate(motionVec);
+    */
     
-    /*
+    
     scalarField motionC = patchInterpolator.faceToPointInterpolate(pointCface);
     vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
     forAll(motionN, ii){
       motionN[ii]/=mag(motionN[ii]);
     }
     vectorField pointDispWall = motionC*motionN;
-    */
+    
     
     vectorField& pdw = pointDispWall;
     
