@@ -1072,7 +1072,7 @@ public:
   
   
   template<class Patch>
-  vectorField wallRelaxation42(Patch& patch_, const scalarListList& weights, double rlxTol, const vectorField &vvff){
+  vectorField wallRelaxation42(Patch& patch_, double rlxTol, const vectorField &vvff){
     pointField saveBoundaryPoints = patch_.localPoints();
 
     const List<face>& llf = patch_.localFaces();
@@ -1117,7 +1117,6 @@ public:
       forAll(newDisplacement, i){
         point& curP = boundaryPoints[i];
         const labelList& pFaces = plistFaces[i];
-        const scalarList& pw = weights[i];
         
         const labelList& lll = ppp[i];
         labelList nl(lll.size(), -1);

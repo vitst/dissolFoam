@@ -129,36 +129,19 @@ int main(int argc, char *argv[])
     dissolProperties.lookupOrDefault<word>("newInletConcentration", "none")
   );
   
-  /*
-  bool cInletHypergeometric
-  (
-    dissolProperties.lookupOrDefault<bool>("hypergeometric", false)
-  );
-  bool modifyInletC
-  (
-    dissolProperties.lookupOrDefault<bool>("modifyInletC", false)
-  );
-  */
-  
   scalar rlxTol( dissolProperties.lookupOrDefault<scalar>("relaxationTolerance", 0.1) );
   
   scalar inigradingZ( dissolProperties.lookupOrDefault<scalar>("inigradingZ", 1.0) );
   scalar timeCoefZ( dissolProperties.lookupOrDefault<scalar>("timeCoefZ", 1.0) );
   int Nz( dissolProperties.lookupOrDefault<int>("numberOfCellsZ", 10) );
   
-  scalar inigradingY( dissolProperties.lookupOrDefault<scalar>("inigradingY", 1.0) );
-  scalar timeCoefY( dissolProperties.lookupOrDefault<scalar>("timeCoefY", 1.0) );
-  int Ny( dissolProperties.lookupOrDefault<int>("numberOfCellsY", 4) );
-  
   Info << "*****************************************************************"<<nl;
   Info << "dissolFoamDict, fixInletConcentration:  " << fixInletConcentration <<nl;
+  Info << "dissolFoamDict, inlet concentration based on:  " << newInletConcentration <<nl;
   Info << "dissolFoamDict, rlxTol:  " << rlxTol <<nl;
   Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
   Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
   Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;
-  Info << "dissolFoamDict, inigradingY:  " << inigradingY <<nl;
-  Info << "dissolFoamDict, timeCoefY:  " << timeCoefY <<nl;
-  Info << "dissolFoamDict, numberOfCellsY:  " << Ny <<nl;
   Info << "*****************************************************************"<<nl;
   
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -172,27 +155,12 @@ int main(int argc, char *argv[])
   // reference to the mesh relaxation object
   DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh);
   
-    scalar Gy = inigradingY / (timeCoefY * runTime.value() + 1.0);
-    scalar lambdaY = 1/static_cast<double>(Ny) * std::log( Gy );
-    
-    scalarListList inletWeights = mesh_rlx->calc_weights1( mesh.boundaryMesh()[inletID], lambdaY, 2);
-    const scalarListList& iW = inletWeights;
-    
-    /*
-    scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
-    scalar lambdaZ = 1/static_cast<double>(Nz) * std::log( Gz );
-    scalarListList wallWeights = mesh_rlx->calc_weights0( mesh.boundaryMesh()[wallID], lambdaZ, 3);
-    //scalarListList wallWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ, 3);
-    const scalarListList& wW = wallWeights;
-    */
-
-	const surfaceScalarField& magSf1 = mesh.magSf();
-	scalar areaCoef0 = 0.0;
-        forAll(magSf1.boundaryField()[inletID], facei){
-          areaCoef0 += magSf1.boundaryField()[inletID][facei];
-        }
-	reduce(areaCoef0, maxOp<scalar>());
- 
+  scalar areaCoef0 = 0.0;
+  const surfaceScalarField& magSf = mesh.magSf();
+  forAll(magSf.boundaryField()[inletID], facei){
+    areaCoef0 += magSf.boundaryField()[inletID][facei];
+  }
+  
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
   /*
@@ -321,14 +289,13 @@ int main(int argc, char *argv[])
         vectorField ndist = mesh_rlx->normalsOnTheEdge();
         scalarField ddist = mesh_rlx->distanceToTheEdge(ndist);
         
-	const surfaceScalarField& magSf = mesh.magSf();
-	scalar areaCoef = 0.0;
+        scalar areaCoef = 0.0;
         forAll(ddist, facei){
           areaCoef += magSf.boundaryField()[inletID][facei];
         }
-	//areaCoef = Foam::sqrt(areaCoef);
-	areaCoef /= areaCoef0;
-	//areaCoef = 1.0 ;
+        //areaCoef = Foam::sqrt(areaCoef);
+        areaCoef /= areaCoef0;
+        //areaCoef = 1.0 ;
 
         //scalar lp = 1.025;
         scalar lp = 0.5;
@@ -337,10 +304,10 @@ int main(int argc, char *argv[])
           //newC[ii] = Foam::exp(ddist[ii]/lp/areaCoef);
           //newC[ii] = 1 + 1-Foam::exp(-ddist[ii]/lp/areaCoef);
           newC[ii] = 1.0/areaCoef + 1-Foam::exp(-ddist[ii]/lp/areaCoef);
-	  //Info<<ii<<"  "<<ddist[ii]<<"  "<<newC[ii]<<"  "<<nl;
+          //Info<<ii<<"  "<<ddist[ii]<<"  "<<newC[ii]<<"  "<<nl;
         }
-	//Info<<"areaCoef:   "<<areaCoef<<nl;
-	//std::exit(0); 
+        //Info<<"areaCoef:   "<<areaCoef<<nl;
+        //std::exit(0); 
         scalar totArea = 0.0;
         scalar totCArea = 0.0;
         forAll(newC, facei){
@@ -355,8 +322,8 @@ int main(int argc, char *argv[])
         
         C.boundaryField()[inletID]==corrF*newC;
       }
-
       // ***************************************************************************
+
       
       /*############################################
       *   Steady-state convection-diffusion solver
@@ -441,85 +408,33 @@ int main(int argc, char *argv[])
     vectorField pointDispWall = patchInterpolator.faceToPointInterpolate(motionVec);
     */
     
-    
     scalarField motionC = patchInterpolator.faceToPointInterpolate(pointCface);
     vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
     forAll(motionN, ii){
       motionN[ii]/=mag(motionN[ii]);
     }
     vectorField pointDispWall = motionC*motionN;
-    
-    
     vectorField& pdw = pointDispWall;
-    
-    //mesh_rlx->fixEdgeConcentration();
-    //std::exit(0);
     
     if(fixInletConcentration){
       Info << "Fix concentration on the edge between walls and inlet"<< nl;
       mesh_rlx->fixEdgeConcentration(pdw);
     }
     
-//  Mesh update 2.2: Inlet displacement
+//  Mesh update 2.2: Inlet and outlet displacement
     vectorField pointDispInlet = mesh_rlx->calculateInletDisplacement(pdw);
-    //pointDispInlet += mesh_rlx->inletRlx(mesh.boundaryMesh()[inletID], pdw);
-            
     vectorField pointDispOutlet = mesh_rlx->calculateOutletDisplacement(pdw);
-    //pointDispOutlet += mesh_rlx->outletRlx(mesh.boundaryMesh()[outletID], pdw);
       
-//  Mesh update 4: Update boundary and relax interior mesh
-//    Info<< nl << "Update boundary and relax interior mesh" <<nl;
-//!!!!!!!!!!!!!!!!!!!!!!!!!!!!    
-    //pointVelocity.boundaryField()[wallID] == pointDispWall;
-    //pointVelocity.boundaryField()[inletID] == pointDispInlet;
-//!!!!!!!!!!!!!!!!!!!!!!!!!!!!    
-    
-    //pointVelocity.boundaryField()[outletID] == pointDispOutlet;
-    
-    //mesh.update();
-    
-    // ****************************************************************
-    //vectorField zeroOutlet( pointDispOutlet.size(), vector::zero );
-    //vectorField zeroInlet( pointDispInlet.size(), vector::zero );
-    //vectorField zeroWall( pointDispWall.size(), vector::zero );
-    //pointVelocity.boundaryField()[inletID] == zeroInlet;
-    //pointVelocity.boundaryField()[wallID] == zeroWall;
-    //pointVelocity.boundaryField()[outletID] == zeroOutlet;
-    // ****************************************************************
-    
 //  Mesh update 5: boundary mesh relaxation
     
-    Info<<nl<<"Calculating new grading...."<< nl;
-    
+    Info<<nl<<"Calculating new Z grading...."<<nl;
     
     scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
     scalar lambdaZ = 1/static_cast<double>(Nz) * std::log( Gz );
-    //scalarListList wallWeights = mesh_rlx->calc_weights0( mesh.boundaryMesh()[wallID], lambdaZ, 3);
     scalarListList wallWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ, 3);
     const scalarListList& wW = wallWeights;
     
-    /*
-    scalar Gy = inigradingY / (timeCoefY * runTime.value() + 1.0);
-    scalar lambdaY = 1/static_cast<double>(Ny) * std::log( Gy );
-    
-    vectorFieldList inletWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[inletID], lambdaY, 2);
-    const vectorFieldList& iW = inletWeights;
-    */
-    
-    /*
-    forAll(inletWeights, ii){
-      Info<< ii << "  " << inletWeights[ii]<<nl;
-    }
-    std::exit(0);
-     */
-    
-    //vectorFieldList outletWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[outletID], lambdaY, 2);
-    //const vectorFieldList& oW = outletWeights;
-    scalarListList outletWeights = mesh_rlx->calc_weights1( mesh.boundaryMesh()[outletID], lambdaY, 2);
-    const scalarListList& oW = outletWeights;
-    
-    Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz
-            <<"   Y grading is "<< Gy <<nl<<nl;
+    Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz <<nl<<nl;
     
     pointField savedPointsAll = mesh.points();
     
@@ -540,22 +455,20 @@ int main(int argc, char *argv[])
       runTime++;
     }
     
-    
-    Info<<"Relaxing inlet-wall edge..."<<nl;
+    Info<<"Relaxing the inlet-wall edge..."<<nl;
     vectorField wiEdgeRlx = mesh_rlx->edgeRelaxation( mesh.boundaryMesh()[inletID], rlxTol);
     const vectorField& werI = wiEdgeRlx;
     pointField mpWIE = mesh_rlx->doWallDisplacement( werI );
     mesh.movePoints( mpWIE );
     
-    Info<<"Relaxing outlet-wall edge..."<<nl;
+    Info<<"Relaxing the outlet-wall edge..."<<nl;
     vectorField woEdgeRlx = mesh_rlx->edgeRelaxation( mesh.boundaryMesh()[outletID], rlxTol);
     const vectorField& werO = woEdgeRlx;
     pointField mpWOE = mesh_rlx->doWallDisplacement( werO );
     mesh.movePoints( mpWOE );
     
 
-    Info<<"Relaxing wall... time: "<< runTime.cpuTimeIncrement() <<nl;
-    //vectorField wallRelax = mesh_rlx->wallRelaxation12( mesh.boundaryMesh()[wallID], wW, rlxTol);
+    Info<<"Relaxing the wall... time: "<< runTime.cpuTimeIncrement() <<nl;
     vectorField wallRelax = mesh_rlx->wallRelaxation11( mesh.boundaryMesh()[wallID], wW, rlxTol);
     Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
     
@@ -570,11 +483,11 @@ int main(int argc, char *argv[])
     
     
     Info<<"Relaxing inlet..."<<nl;
-    vectorField inlRelax = mesh_rlx->wallRelaxation42( mesh.boundaryMesh()[inletID], iW, rlxTol, vvff);
+    vectorField inlRelax = mesh_rlx->wallRelaxation42( mesh.boundaryMesh()[inletID], rlxTol, vvff);
     Info<<"Inlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
 
     Info<<"Relaxing outlet..."<<nl;
-    vectorField outRelax = mesh_rlx->wallRelaxation42( mesh.boundaryMesh()[outletID], oW, rlxTol, vvff);
+    vectorField outRelax = mesh_rlx->wallRelaxation42( mesh.boundaryMesh()[outletID], rlxTol, vvff);
     Info<<"Outlet relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
     
     /*
