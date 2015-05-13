@@ -20,7 +20,7 @@
 // mesh1 is the mesh at time 0
 DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
 :
-  version(0.4),
+  version(0.5),
   mesh_(mesh)
 {
   // get ID of each patch we need
@@ -36,12 +36,14 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
   setUpLists();
   setUpPairsConc();
   
-  //scalar pn = 3*(1+Pstream::myProcNo());
-  //Pout<< "proc: " << Pstream::myProcNo() << "   master?: "<< Pstream::master() << nl;
-  //Pout<< "wallsToAll: " << wallsToAll.size() << "\n";
-  //reduce(pn, maxOp<scalar>());
-  //Pout<< "After pn: " << pn  << nl;
-  //std::exit(0);
+  /*
+    scalar pn = 3*(1+Pstream::myProcNo());
+    Pout<< "proc: " << Pstream::myProcNo() << "   master?: "<< Pstream::master() << nl;
+    Pout<< "wallsToAll: " << wallsToAll.size() << "\n";
+    reduce(pn, maxOp<scalar>());
+    Pout<< "After pn: " << pn  << nl;
+    std::exit(0);
+  */
 }
 
 vectorField DissolMeshRlx::normalsOnTheEdge(){
@@ -101,25 +103,240 @@ scalarField DissolMeshRlx::distanceToTheEdge(vectorField& nn){
       point& curP = ppoints[local_inlet_WallsInletEdges[pi]];
       vector dd = curF-curP;
 
-      //alld[pi] = mag( curF-curP );
-      //alld[pi] = mag( dd ^ nn[pi]);
-      //alld[pi] = mag( dd );
       alld[pi] = mag(dd);
       allvec[pi] = dd;
-
-      //alld[pi] = std::abs( mag( dd & nn[pi]) );
     }
-    //distance[fi] = min( alld );
-
-
     label minid = findMin( alld );  
     distance[fi] = mag( allvec[minid] & nn[minid] );
-
-
   }
-  
   return distance;
 }
+
+scalarField DissolMeshRlx::newC(scalarField& phph, scalar rlxTol){
+  
+  /*
+  const labelListList& ff = mesh_.boundaryMesh()[inletID].faceFaces();
+  pointField pfaces = mesh_.boundaryMesh()[inletID].faceCentres();
+
+  forAll(ff, ii){
+    Info<< ff[ii]<<"   "<< pfaces[ii] <<nl;
+  }
+  */
+  
+  pointField boundaryPoints = mesh_.boundaryMesh()[inletID].localPoints();
+  int N = boundaryPoints.size();
+  
+  const labelList& meshPoints = mesh_.boundaryMesh()[inletID].meshPoints();
+
+  const labelListList& ppp = mesh_.boundaryMesh()[inletID].pointEdges();
+  const edgeList& ee = mesh_.boundaryMesh()[inletID].edges();
+  
+  scalarList point_weight(N, 1.0);
+  syncTools::syncPointList(mesh_, meshPoints, point_weight, plusEqOp<scalar>(), 0.0);
+  forAll(point_weight, i){
+    point_weight[i] = 1/point_weight[i];
+  }
+
+  const labelList& wallsTo  = mesh_.boundaryMesh()[wallID].meshPoints();
+  labelList local_inlet_WallEdges;
+  labelList global_InletEdges;
+  
+  forAll(meshPoints, i){
+    label lW = meshPoints[i];
+
+    label inlind = findIndex(wallsTo, lW);
+    if( inlind != -1){
+      local_inlet_WallEdges.append( i );
+      global_InletEdges.append( lW );
+    }
+    
+  }
+
+
+
+  labelList local_neighbours(local_inlet_WallEdges.size(), -1);
+  forAll(local_inlet_WallEdges, i){
+    
+    const labelList& currentNextEdges = ppp[local_inlet_WallEdges[i]];
+    
+    label secondLineP = -1;
+    
+    forAll(currentNextEdges, j){
+      edge edg = ee[ currentNextEdges[j] ];
+      
+      label edgePair = -1;
+      
+      if( edg.start() == local_inlet_WallEdges[i] ){
+        edgePair = edg.end();
+      }
+      else{
+        edgePair = edg.start();
+      }
+      
+      if( findIndex(local_inlet_WallEdges, edgePair) == -1){
+        secondLineP = edgePair;
+        break;
+      }
+    }
+    local_neighbours[i] = secondLineP;
+  }
+  
+
+  
+  
+  
+  double displ_tol = 1.0;
+  int itt = 0;
+  scalarField nC(phph.size(), 1.0);
+  scalar lp = 0.5;
+
+  forAll(local_inlet_WallEdges, i){
+    label ind_inl = local_inlet_WallEdges[i];
+    label nei_inl = local_neighbours[i];
+
+    vector del = boundaryPoints[ind_inl] - boundaryPoints[nei_inl];
+    scalar kf = lp / (lp + mag(del));
+    
+    //nC[ ind_inl ] = kf * kf * nC[nei_inl];
+    nC[ ind_inl ] = kf * nC[nei_inl];
+  }
+  
+  while(displ_tol>rlxTol){
+    
+    scalarList sumWeights(N, 0.0);
+    scalarField newCC(N, 0.0);
+    
+    forAll(newCC, i){
+      point& curP = boundaryPoints[i];
+
+      const labelList& lll = ppp[i];
+      labelList nl(lll.size(), -1);
+      forAll(lll, ii){
+        const edge& ed = ee[lll[ii]];
+        label edb = ed.start();
+        label ede = ed.end();
+        if(i != edb){
+          nl[ii] = edb;
+        }
+        else{
+          nl[ii] = ede;
+        }
+      }
+
+      forAll(nl, j){
+        label pI = nl[j];
+        scalar cc = nC[pI];
+        point& np = boundaryPoints[pI];
+
+        vector wv = np - curP;
+        scalar mag_wv = mag(wv);
+        scalar nw = mag_wv;//1.0 / mag_wv;
+        
+        nw *= nw;
+        nw *= nw;
+        //nw *= nw;
+
+        scalar weight = 1.0;
+        
+        if(point_weight[i]<1.0){
+          weight = nw * point_weight[pI];
+        }
+        else{
+          weight = nw;
+        }
+        scalar conc = weight * cc;
+        newCC[i] += conc;
+        sumWeights[i] += weight;
+      }
+    }
+
+    syncTools::syncPointList(mesh_, meshPoints, newCC, plusEqOp<scalar>(), 0.0);
+    syncTools::syncPointList(mesh_, meshPoints, sumWeights, plusEqOp<scalar>(), 0.0);
+    // normalization
+    forAll(newCC, pointi){
+      newCC[pointi] /= sumWeights[pointi];
+    }
+    
+    /*
+    forAll(newCC, i){
+      if(boundaryPoints[i].y()>0.49){
+        Info<<i<<"  "<<newCC[i]<<"  "<< boundaryPoints[i]<<"   "<< point_weight[i] <<nl;
+      }
+    }
+    std::exit(0);
+    */
+
+    
+    forAll(local_inlet_WallEdges, i){
+      label ind_inl = local_inlet_WallEdges[i];
+      label nei_inl = local_neighbours[i];
+
+      vector del = boundaryPoints[ind_inl] - boundaryPoints[nei_inl];
+      scalar kf = lp / (lp + mag(del));
+
+      //newCC[ ind_inl ] = kf * kf * newCC[nei_inl];
+      newCC[ ind_inl ] = 1.0102 * kf * newCC[nei_inl];
+    }
+    
+    
+    scalar totPhi = 0.0;
+    scalar totCPhi = 0.0;
+    forAll(phph, i){
+      totPhi += phph[i];
+      totCPhi += newCC[i] * phph[i];
+    }
+
+    scalar corrF = 0.0;
+    if(totCPhi!=0.0){
+      corrF = totPhi/totCPhi;
+    }
+
+    newCC *= corrF;
+    
+
+    scalarField aux_f = mag(newCC - nC);
+    scalarField aux_f0(nC.size(), 0.0);
+
+    if( aux_f == aux_f0 ){
+      displ_tol = 0.0;
+    }
+    else{
+      displ_tol = average( aux_f );
+    }
+
+    scalarField aux_fn = newCC;
+    scalarField aux_fn0(nC.size(), 0.0);
+    scalar displ_tol_norm;
+    if( aux_fn == aux_fn0 ){
+      displ_tol_norm = 0.0;
+    }
+    else{
+      displ_tol_norm = average( aux_fn );
+    }
+
+    reduce(displ_tol, sumOp<scalar>());
+    reduce(displ_tol_norm, sumOp<scalar>());
+    displ_tol /= displ_tol_norm;
+
+    nC = newCC;
+
+    if(itt%100==0){
+      Info<<" Inlet C: Iter "<<itt<<"  tolerance: "<<displ_tol<< nl;
+    }
+    itt+=1;
+  }
+
+  Info<< " Inlet C: converged in "<<itt<<" iterations. Tolerance: " << displ_tol<< nl;
+  
+  return nC;
+}
+
+scalarField DissolMeshRlx::newC1(scalarField& phph, scalar rlxTol){
+  
+}
+
+
+
 
 
 // ++
@@ -289,8 +506,6 @@ void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){
     
     //concNorm[ currentTriple[0] ] = newC0 * newN0;
     concNorm[ currentTriple[0] ] = newC0 * cN0 / c0;
-    
-    //Pout << (cN0 / c0) << "   c0: "<< c0 << "     new: "<< newC0 << nl;
   }
 }
 
@@ -348,9 +563,7 @@ void DissolMeshRlx::setUpPairsConc(){
   const labelListList& plistEdges = mesh_.boundaryMesh()[wallID].pointEdges();
   const edgeList& edgeL = mesh_.boundaryMesh()[wallID].edges();
   
-  
   inletTriple.setSize(local_wall_WallsInletEdges.size());
-  
   
   labelList secondLine(local_wall_WallsInletEdges.size());
   
@@ -425,43 +638,9 @@ void DissolMeshRlx::setUpLists(){
     }
     
     // create walls-outlet edge list of vertex IDs
-    //std::map<int,int>::iterator iO = allToOutlet.find( lW );
-    //if(iO != allToOutlet.end()){
     if( findIndex(outletToAll, lW) != -1){
       local_wall_WallsOutletEdges.append( i );
       global_WallOutletEdges.append( lW );
-    }
-  }
-  
-  scaleList.setSize( mesh_.boundaryMesh()[inletID].nPoints(), -1 );
-  const pointField& pCoord = mesh_.boundaryMesh()[inletID].localPoints();
-  
-  forAll(scaleList, i){
-    point pp = pCoord[ i ];
-    forAll(local_inlet_WallsInletEdges, j){
-      if( std::abs(pp.x()-pCoord[local_inlet_WallsInletEdges[j]].x())<0.1 
-              &&  
-          pp.y() * pCoord[local_inlet_WallsInletEdges[j]].y()>0
-        ){
-        scaleList[i] = j;
-        break;
-      }
-    }
-  }
-  
-  scaleListOutlet.setSize( mesh_.boundaryMesh()[outletID].nPoints(), -1 );
-  const pointField& pCoordOut = mesh_.boundaryMesh()[outletID].localPoints();
-  
-  forAll(scaleListOutlet, i){
-    point pp = pCoordOut[ i ];
-    forAll(local_outlet_WallsOutletEdges, j){
-      if( std::abs(pp.x()-pCoordOut[local_outlet_WallsOutletEdges[j]].x())<0.1 
-              &&  
-          pp.y() * pCoord[local_outlet_WallsOutletEdges[j]].y()>0
-        ){
-        scaleListOutlet[i] = j;
-        break;
-      }
     }
   }
 }
