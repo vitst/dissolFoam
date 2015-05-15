@@ -450,7 +450,7 @@ int main(int argc, char *argv[])
         }
       
         
-        if(newInletConcentration != "copySolution"){
+        if(newInletConcentration != "Dankwerts"){
           break;
         }
         
@@ -464,10 +464,18 @@ int main(int argc, char *argv[])
         forAll(fc, ii){
           //newC[ii] = C[fc[ii]];
           vector vdel = fcr[ii]-ccr[fc[ii]];
-          scalar del = mag(vdel);
+          scalar del = std::abs(vdel.z());
+          //scalar del = mag(vdel);
           
-          scalar aa = D.value() / (mag(U[fc[ii]]) * del);
+          scalar aa = D.value() / ( std::abs(U[fc[ii]].z()) * del);
           newC[ii] = (1+aa*C[fc[ii]])/(1+aa);
+          
+          /*
+          Pout<<ii<<"   "
+                  << U[fc[ii]].z() << "  "
+                  << del << "  "
+                  <<nl;
+          */
         }
         
         //std::exit(0);
