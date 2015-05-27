@@ -111,6 +111,8 @@ public:
 
   void fixEdgeConcentration( vectorField& );
   
+  void fixEdgeConcentration1( vectorField&, scalarField&, vectorField&, scalarField&);
+  
   // fix edge displacement and calculate inlet displ.
   vectorField calculateInletDisplacement( vectorField& );
   

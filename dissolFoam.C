@@ -142,6 +142,8 @@ int main(int argc, char *argv[])
   Info << "*****************************************************************"<<nl;
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
+  
+  
 /*
   int numPatches = mesh.boundaryMesh().size();
   wordList boundaryTypes(numPatches, "zeroGradient");
@@ -168,9 +170,10 @@ int main(int argc, char *argv[])
 
   Pout<<numPatches<< nl << Kinv << nl;
 
-  std::exit(0);
 */
-
+  //scalar aa= -3.9999999999999;
+  //Info<<nl<<mag(aa)<<"   "<<aa<<nl;
+  //std::exit(0);
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
   // Get patch ID for boundaries we want to move ("walls" "inlet")
@@ -317,87 +320,13 @@ int main(int argc, char *argv[])
       }
         
       if(newInletConcentration=="distanceFunction" ){
-        
-        vectorField ndist = mesh_rlx->normalsOnTheEdge();
-        scalarField ddist = mesh_rlx->distanceToTheEdge(ndist);
-        
-        scalarField newC(ddist.size(), 0.0);
-        /*
-        const surfaceScalarField& magSf1 = mesh.magSf();
-        
-        scalar areaCoef = 0.0;
-        forAll(ddist, facei){
-          areaCoef += magSf1.boundaryField()[inletID][facei];
-        }
-        areaCoef /= areaCoef0;
-
-        scalar lp = 0.5;
-        forAll(newC, ii){
-          //newC[ii] = 1 + 1-Foam::exp(-ddist[ii]/lp/areaCoef);
-          newC[ii] = 1.0/areaCoef + 1-Foam::exp(-ddist[ii]/lp/areaCoef);
-          //Info<<ii<<"  "<<ddist[ii]<<"  "<<newC[ii]<<"  "<<nl;
-        }*/
-        
-        
-        /*
-        scalar h1 = max( ddist );
-        scalar h2 = 2*h1;
-        scalar lp = 0.5;
-        
-        forAll(newC, i){
-          scalar a=8.0/(h2*h2+4*h2*lp);
-          newC[i] = 1-a/2.0 * (h1 - ddist[i]) * (h1 - ddist[i]);
-          scalar G = 2*h2/lp; // = 2kh/D
-          scalar alpha = 4*G/(8+G);
-
-          newC[i] /= 1-alpha/20.0;
-        }
-        
-        scalar totPhi = 0.0;
-        scalar totCPhi = 0.0;
-        forAll(newC, facei){
-          totPhi += phi.boundaryField()[inletID][facei];
-          totCPhi += newC[facei] * phi.boundaryField()[inletID][facei];
-        }
-        
-        scalar corrF = 0.0;
-        if(totCPhi!=0.0){
-          corrF = totPhi/totCPhi;
-        }
-        
-        C.boundaryField()[inletID]==corrF*newC;
-        */
-        
-        
-        
         coupledPatchInterpolation patchInterpolator(mesh.boundaryMesh()[inletID], mesh);
-        
-        scalarField CCC = patchInterpolator.faceToPointInterpolate(C.boundaryField()[inletID]);
-        scalarField & CCC1 = CCC;
         scalarField phph = patchInterpolator.faceToPointInterpolate(phi.boundaryField()[inletID]);
-        scalarField & phph1 = phph;
-        
-        scalarField CCC2 = mesh_rlx->newC(phph1, 0.000000001);
-        scalarField CCCf = patchInterpolator.pointToFaceInterpolate(CCC2);
-        C.boundaryField()[inletID]==CCCf;
-        
-        
-        /*
-        Info<<nl<<"Points"<<nl<<nl;
-        forAll(CCC2, i){
-          if(mesh.boundaryMesh()[inletID].localPoints()[i].y()>0.49){
-            Info<<i<<"  "<<CCC2[i]<<"  "<< mesh.boundaryMesh()[inletID].localPoints()[i]<<"   "<< phph1[i] <<nl;
-          }
-        }
-        Info<<nl<<"Faces"<<nl<<nl;
-        forAll(CCCf, i){
-          if(mesh.boundaryMesh()[inletID].faceCentres()[i].x()>0.0){
-            Info<<i<<"  "<<CCCf[i]<<"  "<< mesh.boundaryMesh()[inletID].faceCentres()[i]<<"   "<<phi.boundaryField()[inletID][i] <<nl;
-          }
-        }
-        */
+        scalarField & phphr = phph;
+        scalarField newConc = mesh_rlx->newC(phphr, 0.000000001);
+        scalarField Cf = patchInterpolator.pointToFaceInterpolate(newConc);
+        C.boundaryField()[inletID]==Cf;
       }
-      //std::exit(0);
       
       // ***************************************************************************
 
@@ -454,7 +383,7 @@ int main(int argc, char *argv[])
           break;
         }
         
-        scalarField oldC = C.boundaryField()[inletID];
+        scalarField& oldC = C.boundaryField()[inletID];
         
         scalarField newC(oldC.size(), 0.0);
         
@@ -469,35 +398,11 @@ int main(int argc, char *argv[])
           
           scalar aa = D.value() / ( std::abs(U[fc[ii]].z()) * del);
           newC[ii] = (1+aa*C[fc[ii]])/(1+aa);
-          
-          /*
-          Pout<<ii<<"   "
-                  << U[fc[ii]].z() << "  "
-                  << del << "  "
-                  <<nl;
-          */
         }
         
-        //std::exit(0);
-        // normalize
-        /*
-        const surfaceScalarField& magSf = mesh.magSf();
-        scalar totArea = 0.0;
-        scalar totCArea = 0.0;
-        forAll(newC, facei){
-          totArea += phi.boundaryField()[inletID][facei];
-          totCArea += newC[facei] * phi.boundaryField()[inletID][facei];
-        }
-        scalar corrF = 0.0;
-        if(totCArea!=0.0){
-          corrF = totArea/totCArea;
-        }
-        */
+        scalarField diff = newC - oldC;
         
-        //C.boundaryField()[inletID]==corrF*newC;
         C.boundaryField()[inletID]==newC;
-        
-        scalarField diff = C.boundaryField()[inletID] - oldC;
         
         scalar ttt = std::abs( gSumMag( diff ) );
         reduce(ttt, sumOp<scalar>());
@@ -565,9 +470,31 @@ int main(int argc, char *argv[])
     vectorField pointDispWall = motionC*motionN;
     vectorField& pdw = pointDispWall;
     
+    
+    /*
+    forAll(pointDispWall, i){
+      Info<<i<<"  "<< pointDispWall[i]
+              <<"  "<< mag(pointDispWall[i])
+              <<"  "<< motionC[i]
+              <<"  "<< motionN[i]
+              <<"  "<< mag(motionN[i])
+              <<nl;
+    }
+    std::exit(0);
+     */
+    
+    
     if(fixInletConcentration){
       Info << "Fix concentration on the edge between walls and inlet"<< nl;
       mesh_rlx->fixEdgeConcentration(pdw);
+      
+      /*
+      vectorField& motionNp = motionN;
+      scalarField& inlC = C.boundaryField()[inletID];
+      scalarField& walC = C.boundaryField()[wallID];
+      mesh_rlx->fixEdgeConcentration1(pdw, inlC, motionNp, walC);
+       */
+      
     }
     
 //  Mesh update 2.2: Inlet and outlet displacement
