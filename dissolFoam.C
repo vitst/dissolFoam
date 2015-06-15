@@ -126,6 +126,8 @@ int main(int argc, char *argv[])
     dissolProperties.lookupOrDefault<word>("newInletConcentration", "none")
   );
   
+  scalar l_T( dissolProperties.lookupOrDefault<scalar>("lT", 1.0) );
+  
   scalar rlxTol( dissolProperties.lookupOrDefault<scalar>("relaxationTolerance", 0.1) );
   
   scalar inigradingZ( dissolProperties.lookupOrDefault<scalar>("inigradingZ", 1.0) );
@@ -142,7 +144,10 @@ int main(int argc, char *argv[])
   Info << "*****************************************************************"<<nl;
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
+  Info<<nl<<"!!! Set timescale dt to l_T*dt !!!"<<nl;
+  runTime.setDeltaT(l_T*runTime.deltaTValue());
   
+  Info<<"New dt= "<<runTime.deltaTValue()<<nl<<nl;
   
 /*
   int numPatches = mesh.boundaryMesh().size();
@@ -378,7 +383,6 @@ int main(int argc, char *argv[])
           }
         }
       
-        
         if(newInletConcentration != "Dankwerts"){
           break;
         }
@@ -506,7 +510,7 @@ int main(int argc, char *argv[])
     Info<<nl<<"Calculating new Z grading...."<<nl;
     
     scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
-    scalar lambdaZ = 1/static_cast<double>(Nz) * std::log( Gz );
+    scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
     scalarListList wallWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ, 3);
     const scalarListList& wW = wallWeights;
     

@@ -391,6 +391,15 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
     pointDispInlet[ local_inlet_WallsInletEdges[i] ].z() = 0;
   }
   
+  
+  scalar tol = 1.0;
+  while( tol>0.000001 ){
+  
+  
+  }
+  
+  
+  
   forAll(local_wall_WallsInletEdges, i){
     vector A = wallDispl[ local_wall_WallsInletEdges[i] ];
     vector dz(0.0, 0.0, maxdZ - A.z());
