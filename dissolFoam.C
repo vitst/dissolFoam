@@ -144,10 +144,9 @@ int main(int argc, char *argv[])
   Info << "*****************************************************************"<<nl;
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
-  Info<<nl<<"!!! Set timescale dt to l_T*dt !!!"<<nl;
-  runTime.setDeltaT(l_T*runTime.deltaTValue());
-  
-  Info<<"New dt= "<<runTime.deltaTValue()<<nl<<nl;
+  //Info<<nl<<"!!! Set timescale dt to l_T*dt !!!"<<nl;
+  //runTime.setDeltaT(l_T*runTime.deltaTValue());
+  //Info<<"New dt= "<<runTime.deltaTValue()<<nl<<nl;
   
 /*
   int numPatches = mesh.boundaryMesh().size();
@@ -471,21 +470,8 @@ int main(int argc, char *argv[])
       motionN[ii]/=mag(motionN[ii]);
     }
     
-    vectorField pointDispWall = motionC*motionN;
+    vectorField pointDispWall = l_T * motionC*motionN;
     vectorField& pdw = pointDispWall;
-    
-    
-    /*
-    forAll(pointDispWall, i){
-      Info<<i<<"  "<< pointDispWall[i]
-              <<"  "<< mag(pointDispWall[i])
-              <<"  "<< motionC[i]
-              <<"  "<< motionN[i]
-              <<"  "<< mag(motionN[i])
-              <<nl;
-    }
-    std::exit(0);
-     */
     
     
     if(fixInletConcentration){
@@ -498,7 +484,6 @@ int main(int argc, char *argv[])
       scalarField& walC = C.boundaryField()[wallID];
       mesh_rlx->fixEdgeConcentration1(pdw, inlC, motionNp, walC);
        */
-      
     }
     
 //  Mesh update 2.2: Inlet and outlet displacement

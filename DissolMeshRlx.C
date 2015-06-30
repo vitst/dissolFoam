@@ -307,7 +307,7 @@ scalarField DissolMeshRlx::newC(scalarField& phph, scalar rlxTol){
 }
 
 scalarField DissolMeshRlx::newC1(scalarField& phph, scalar rlxTol){
-  
+  return phph;
 }
 
 
@@ -376,64 +376,200 @@ Foam::vectorField DissolMeshRlx::localFaceToPointNormalInterpolate(const pointFi
 
 // ++
 vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
+  // currnt wall points
+  const pointField& wallBP = mesh_.boundaryMesh()[wallID].localPoints();
+  // list of neighbor faces
+  const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
+  // list of faces
+  const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();
+  // new points coordinates
+  pointField curWallBP = wallBP+wallDispl;
 
-  scalar maxdZ = 0;
-  forAll(local_wall_WallsInletEdges, i){
-    vector A = wallDispl[ local_wall_WallsInletEdges[i] ];
-    maxdZ = max( maxdZ, A.z() );    
-  }
-
-  reduce(maxdZ, maxOp<scalar>());
+  // new faceCentres and faceNormals
+  //pointField faceCs = faceCentres(curWallBP, llf);
+  vectorField faceNs = faceNormals(curWallBP, llf);
+  coupledPatchInterpolation patchInterpolator( mesh_.boundaryMesh()[wallID], mesh_ );
+  vectorField pointNs = patchInterpolator.faceToPointInterpolate(faceNs);
   
-  vectorField pointDispInlet( mesh_.boundaryMesh()[inletID].localPoints().size(), vector::zero );
-  pointDispInlet.replace( vector::Z, maxdZ);
+  // number of points on the edge
+  int N = local_wall_WallsInletEdges.size();
+  
+  pointField edgePoints(N);
+  vectorField edgeNorms(N);
+  forAll(local_wall_WallsInletEdges, i){
+    label pointI = local_wall_WallsInletEdges[i];
+    edgePoints[i] = curWallBP[pointI];
+    edgeNorms[i] = pointNs[pointI];
+    edgeNorms[i]/=mag(edgeNorms[i]);
+  }
+  scalar maxZ = max( edgePoints.component(vector::Z) );
+  reduce(maxZ, maxOp<scalar>());
+  
+  // *************************************************************************************
+
+  pointField inP = mesh_.boundaryMesh()[inletID].localPoints();
+  
+  vectorField pointDispInlet( inP.size(), vector::zero );
+  forAll(inP,i){
+    pointDispInlet[i].z() = maxZ - inP[i].z();
+  }
+  
   forAll(local_inlet_WallsInletEdges, i){
     pointDispInlet[ local_inlet_WallsInletEdges[i] ].z() = 0;
   }
+  // *************************************************************************************
   
   
+  
+  vectorField displacement(N, vector::zero);
+  
+  //const pointField& boundaryPoints = mesh_.boundaryMesh()[inletID].localPoints();
   scalar tol = 1.0;
-  while( tol>0.000001 ){
+  scalar tolerance = 0.0000000001;
+  int itt = 0;
+  while( tol>tolerance ){
+    forAll(local_wall_WallsInletEdges, i){
+      displacement[i].z() = maxZ - edgePoints[i].z();
+    }
+    vectorField proj_disp = transform(I - edgeNorms*edgeNorms, displacement);
+    
   
-  
+    scalarField aux_f = mag(proj_disp);
+    scalarField aux_f0(N, 0.0);
+
+    if( aux_f == aux_f0 ){
+      tol = 0.0;
+    }
+    else{
+      tol = average( aux_f );
+    }
+    reduce(tol, sumOp<scalar>());
+    tol /= static_cast<double>( Pstream::nProcs() );
+    
+    if(tol>tolerance){
+      edgePoints += proj_disp;
+    }
+    
+    if(itt%100==0){
+      Info<<"  Wall-inlet iter "<<itt<<"  tolerance: "<<tol<< nl;
+    }
+
+    itt+=1;
   }
   
+  forAll(local_wall_WallsInletEdges, i){
+    label pointI = local_wall_WallsInletEdges[i];
+    wallDispl[ pointI ] = edgePoints[i]-wallBP[pointI];
+  }
   
-  
+  /*
   forAll(local_wall_WallsInletEdges, i){
     vector A = wallDispl[ local_wall_WallsInletEdges[i] ];
     vector dz(0.0, 0.0, maxdZ - A.z());
           
     wallDispl[ local_wall_WallsInletEdges[i] ] += dz;
   }
+  */
 
   return pointDispInlet;
 }
 
 vectorField DissolMeshRlx::calculateOutletDisplacement(vectorField& wallDispl){
+  // currnt wall points
+  const pointField& wallBP = mesh_.boundaryMesh()[wallID].localPoints();
+  // list of neighbor faces
+  const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
+  // list of faces
+  const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();
+  // new points coordinates
+  pointField curWallBP = wallBP+wallDispl;
+  
 
-  scalar maxdZ = 0;
+  //pointField faceCs = faceCentres(curWallBP, llf);
+  vectorField faceNs = faceNormals(curWallBP, llf);
+  coupledPatchInterpolation patchInterpolator( mesh_.boundaryMesh()[wallID], mesh_ );
+  vectorField pointNs = patchInterpolator.faceToPointInterpolate(faceNs);
+  
+  // number of points on the edge
+  int N = local_wall_WallsOutletEdges.size();
+  
+  pointField edgePoints(N);
+  vectorField edgeNorms(N);
   forAll(local_wall_WallsOutletEdges, i){
-    vector A = wallDispl[ local_wall_WallsOutletEdges[i] ];
-    if( mag(A.z()) > maxdZ ){
-      maxdZ = A.z();
-    }
+    label pointI = local_wall_WallsOutletEdges[i];
+    edgePoints[i] = curWallBP[pointI];
+    edgeNorms[i] = pointNs[pointI];
+    edgeNorms[i]/=mag(edgeNorms[i]);
   }
 
-  reduce(maxdZ, maxOp<scalar>());
+  scalar minZ = min( edgePoints.component(vector::Z) );
+  reduce(minZ, minOp<scalar>());
   
-  vectorField pointDispOutlet( mesh_.boundaryMesh()[outletID].localPoints().size(), vector::zero );
-  pointDispOutlet.replace( vector::Z, maxdZ);
+  // ***************************************************************************
+  
+  pointField outP = mesh_.boundaryMesh()[outletID].localPoints();
+  
+  vectorField pointDispOutlet( outP.size(), vector::zero );
+  forAll(outP,i){
+    pointDispOutlet[i].z() = minZ - outP[i].z();
+  }
+  
   forAll(local_outlet_WallsOutletEdges, i){
     pointDispOutlet[ local_outlet_WallsOutletEdges[i] ].z() = 0;
   }
+  
+  // ***************************************************************************
 
+  // new faceCentres and faceNormals
+  
+  vectorField displacement(N, vector::zero);
+  
+  scalar tol = 1.0;
+  scalar tolerance = 0.0000000001;
+  int itt = 0;
+  while( tol>tolerance ){
+    forAll(local_wall_WallsOutletEdges, i){
+      displacement[i].z() = minZ - edgePoints[i].z();
+    }
+    vectorField proj_disp = transform(I - edgeNorms*edgeNorms, displacement);
+    
+    scalarField aux_f = mag(proj_disp);
+    scalarField aux_f0(N, 0.0);
+
+    if( aux_f == aux_f0 ){
+      tol = 0.0;
+    }
+    else{
+      tol = average( aux_f );
+    }
+    reduce(tol, sumOp<scalar>());
+    tol /= static_cast<double>( Pstream::nProcs() );
+    
+    if(tol>tolerance){
+      edgePoints += proj_disp;
+    }
+    
+    if(itt%100==0){
+      Info<<"  Wall-outlet iter "<<itt<<"  tolerance: "<<tol<< nl;
+    }
+
+    itt+=1;
+  }
+  
+  forAll(local_wall_WallsOutletEdges, i){
+    label pointI = local_wall_WallsOutletEdges[i];
+    wallDispl[ pointI ] = edgePoints[i]-wallBP[pointI];
+  }
+  
+  
+  /*
   forAll(local_wall_WallsOutletEdges, i){
     vector A = wallDispl[ local_wall_WallsOutletEdges[i] ];
     vector dz(0.0, 0.0, maxdZ - A.z());
           
     wallDispl[ local_wall_WallsOutletEdges[i] ] += dz;
   }
+  */
 
   return pointDispOutlet;
 }
@@ -509,10 +645,6 @@ void DissolMeshRlx::fixEdgeConcentration1(vectorField& concNorm, scalarField& in
       idelt[i] += pw * delta;
       
       faceToPointSumWeights[i] += pw;
-      
-      //conc[i] += 1.0 * nnC;
-      //faceToPointSumWeights[i] += 1.0;
-      //Info<< i<< " BB  "<< inlC[curFaces[facei]] <<"   "<< delta <<nl;
     }
     
     const labelList& wCurFaces = wpfl[wallpi];
