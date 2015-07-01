@@ -494,12 +494,15 @@ int main(int argc, char *argv[])
     
     Info<<nl<<"Calculating new Z grading...."<<nl;
     
-    scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
-    scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
-    scalarListList wallWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ, 3);
-    const scalarListList& wW = wallWeights;
+    //scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
+    //scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
+    //scalarListList wallWeights = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ, 3);
+    //scalarListList wallWeights = mesh_rlx->calc_weights_faces( mesh.boundaryMesh()[wallID]);
+    vectorFieldList wallWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[wallID]);
+    const vectorFieldList& wW = wallWeights;
+    //const scalarListList& wW = wallWeights;
     
-    Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz <<nl<<nl;
+    //Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz <<nl<<nl;
     
     pointField savedPointsAll = mesh.points();
     
@@ -539,7 +542,7 @@ int main(int argc, char *argv[])
     // *********************************************************************************
     // Relaxing surfaces. 2D
     Info<<"Relaxing the wall... time: "<< runTime.cpuTimeIncrement() <<nl;
-    vectorField wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID], wW, rlxTol);
+    vectorField wallRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[wallID], wW, rlxTol);
     Info<<"Wall relaxation time: " << runTime.cpuTimeIncrement() << " s" << nl;
     
     mesh.movePoints( savedPointsAll );
