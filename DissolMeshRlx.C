@@ -11,8 +11,8 @@
 
 #include "pyramidPointFaceRef.H"
 
-#include "transformField.H"
-#include "symmTransformField.H"
+//#include "transformField.H"
+//#include "symmTransformField.H"
 
 #include "triPointRef.H"
 
@@ -383,7 +383,7 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
   // list of faces
   const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();
   // new points coordinates
-  pointField curWallBP = wallBP+wallDispl;
+  pointField curWallBP = wallBP + wallDispl;
 
   // new faceCentres and faceNormals
   //pointField faceCs = faceCentres(curWallBP, llf);
@@ -425,15 +425,27 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
   
   //const pointField& boundaryPoints = mesh_.boundaryMesh()[inletID].localPoints();
   scalar tol = 1.0;
-  scalar tolerance = 0.0000000001;
+  scalar tolerance = 0.00000000001;
   int itt = 0;
   while( tol>tolerance ){
     forAll(local_wall_WallsInletEdges, i){
-      displacement[i].z() = maxZ - edgePoints[i].z();
+      displacement[i].z() = (maxZ - edgePoints[i].z());
     }
-    vectorField proj_disp = transform(I - edgeNorms*edgeNorms, displacement);
+    vectorField proj_disp = transform(I - edgeNorms*edgeNorms/8.0, displacement);
+    //vectorField proj_disp = (displacement + transform(I - edgeNorms*edgeNorms*2.0, displacement))/2.0;
     
-  
+    /*
+    if( Pstream::master() ){
+      vector aa = displacement[0] - proj_disp[0];
+      Info<<displacement[0]<<"  "
+              <<proj_disp[0]<<"  "
+              <<edgeNorms[0]<<"  aa "
+              <<aa<<"  "
+              <<nl;
+    
+    }
+    */
+    
     scalarField aux_f = mag(proj_disp);
     scalarField aux_f0(N, 0.0);
 
@@ -448,6 +460,9 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
     
     if(tol>tolerance){
       edgePoints += proj_disp;
+    }
+    else{
+      edgePoints += displacement;
     }
     
     if(itt%100==0){
@@ -531,7 +546,7 @@ vectorField DissolMeshRlx::calculateOutletDisplacement(vectorField& wallDispl){
     forAll(local_wall_WallsOutletEdges, i){
       displacement[i].z() = minZ - edgePoints[i].z();
     }
-    vectorField proj_disp = transform(I - edgeNorms*edgeNorms, displacement);
+    vectorField proj_disp = transform(I - edgeNorms*edgeNorms/8.0, displacement);
     
     scalarField aux_f = mag(proj_disp);
     scalarField aux_f0(N, 0.0);
@@ -547,6 +562,9 @@ vectorField DissolMeshRlx::calculateOutletDisplacement(vectorField& wallDispl){
     
     if(tol>tolerance){
       edgePoints += proj_disp;
+    }
+    else{
+      edgePoints += displacement;
     }
     
     if(itt%100==0){

@@ -131,7 +131,7 @@ public:
 
   
   template<class Patch>
-  vectorField edgeRelaxation(Patch& patchIO_, double rlxTol){
+  vectorField edgeRelaxation(Patch& patchIO_, double rlxTol, vectorFieldList& wv){
     
     Patch& patch_ = mesh_.boundaryMesh()[wallID];
     const List<face>& llf = patch_.localFaces();
@@ -200,6 +200,8 @@ public:
         point& curP = boundaryPoints[curI];
         const labelList& pNeib = nepe[i];
         
+        vectorField& curwv = wv[i];
+        
         forAll(pNeib, ii){
           label ind = pNeib[ii];
           point& neibP = boundaryPoints[ind];
@@ -208,8 +210,8 @@ public:
           scalar mag_d = mag(d2);
           
           vector disp;
-          disp.x() = d2.x(); // * nw; // TODO it is for the weighted 
-          disp.y() = d2.y(); // * nw;
+          disp.x() = d2.x() * curwv[ii].x(); // * nw; // TODO it is for the weighted 
+          disp.y() = d2.y() * curwv[ii].y(); // * nw;
           disp.z() = 0.0;
           displacement[i] += disp;
           tol[i] += mag_d;
@@ -248,7 +250,8 @@ public:
       
       forAll(local_wall_WallEdges, i){
         label ind = local_wall_WallEdges[i];
-        boundaryPoints[ind] += 0.25*projectedDisplacement[i];
+        //boundaryPoints[ind] += 0.25*projectedDisplacement[i];
+        boundaryPoints[ind] += projectedDisplacement[i];
       }
       
       scalarField aux_f = mag(projectedDisplacement)/tol;
@@ -383,9 +386,9 @@ public:
       itt+=1;
       
       
-      if(itt%40000==0){
-        break;
-      }
+      //if(itt%40000==0){
+      //  break;
+      //}
       
     }
     Info<< patch_.name() << "  converged in "<< itt 
@@ -442,6 +445,8 @@ public:
           vector disp;
           disp.x() = d.x() * pw[j].x();
           disp.y() = d.y() * pw[j].y();
+          //disp.x() = d.x() * 0.25;
+          //disp.y() = d.y() * 0.25;
           disp.z() = d.z() * pw[j].z();
           displacement[i] += disp;
           
@@ -453,13 +458,14 @@ public:
           faceToPointSumWeights[i] += nw;
         }
       }
-
+      
       // synchronizing over the cyclic and processor boundaries
       syncTools::syncPointList(mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, meshPoints, tol, plusEqOp<scalar>(), 0.0);
       
       syncTools::syncPointList(mesh_, meshPoints, pointNorm, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, meshPoints, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
+
       // normalization
       forAll(pointNorm, pointi){
         pointNorm[pointi] /= faceToPointSumWeights[pointi];
@@ -507,9 +513,9 @@ public:
       itt+=1;
       
       
-      if(itt%40000==0){
-        break;
-      }
+      //if(itt%40000==0){
+      //  break;
+      //}
       
     }
     Info<< patch_.name() << "  converged in "<< itt 
@@ -1081,10 +1087,13 @@ public:
         vector w = vector::zero;
         
         for(int ii=0; ii<3; ii++){
-          if(d[ii]!=0)
-            w[ii] = 1/ std::abs( d[ii] );
-          else
+          if(d[ii]!=0){
+            w[ii] = 1.0 / std::abs( d[ii] );
+            //if(ii!=2) w[ii] = 1.0;
+          }
+          else{
             w[ii] = 0.0;
+          }
         }
         
         //pw[j] = (1 - 0.5 * lambda * d.x()/std::abs(d.x()) * faceC.x()/std::abs(faceC.x()) );
@@ -1117,6 +1126,102 @@ public:
 
 
 
+  template<class Patch>
+  vectorFieldList calc_edge_weights(const Patch& patchIO_){
+    
+    const Patch& patch_ = mesh_.boundaryMesh()[wallID];
+
+    pointField boundaryPoints = patch_.localPoints();
+    
+    const labelListList& ppp = patch_.pointEdges();
+    const edgeList& ee = patch_.edges();
+    
+    const labelList& meshPoints = patchIO_.meshPoints();
+    const labelList& wallsTo  = patch_.meshPoints();
+    labelList local_wall_WallEdges;
+    labelList global_WallEdges;
+    forAll(wallsTo, i){
+      label lW = wallsTo[i];
+
+      label inlind = findIndex(meshPoints, lW);
+      if( inlind != -1){
+        local_wall_WallEdges.append( i );
+        global_WallEdges.append( lW );
+      }
+    }
+    
+    // relax edges
+    label NN = local_wall_WallEdges.size();
+    labelListList nepe;
+    forAll(local_wall_WallEdges, i){
+      label ind = local_wall_WallEdges[i];
+
+      const labelList& lll = ppp[ind];
+      labelList nel;
+      forAll(lll, ii){
+        const edge& ed = ee[ lll[ii] ];
+        label edb = ed.start();
+        
+        if( edb!=ind && findIndex(local_wall_WallEdges, edb) != -1 ){
+          nel.append(edb);
+        }
+        
+        label ede = ed.end();
+        if( ede!=ind && findIndex(local_wall_WallEdges, ede) != -1){
+          nel.append(ede);
+        }
+      }
+      nepe.append(nel);
+    }
+    
+    vectorFieldList weights( NN );
+    vectorField sumWeights( NN, vector::zero );
+
+    forAll(nepe, i){
+      label  curI = local_wall_WallEdges[i];
+      point& curP = boundaryPoints[curI];
+      const labelList& pNeib = nepe[i];
+
+      vectorField& pw = weights[i];
+      pw.setSize(pNeib.size());
+      
+      vector sumw = vector::zero;
+      forAll(pNeib, ii){
+        label ind = pNeib[ii];
+        point& neibP = boundaryPoints[ind];
+        vector d2 = neibP - curP;
+
+        vector w = vector::zero;
+        
+        for(int j=0; j<3; j++){
+          if(d2[j]!=0)
+            w[j] = 1/ std::abs( d2[j] );
+          else
+            w[j] = 0.0;
+        }
+        pw[ii] = w;
+        sumw += pw[ii];
+      }
+      sumWeights[i] = sumw;
+    }
+    
+    syncTools::syncPointList(mesh_, global_WallEdges, sumWeights, plusEqOp<vector>(), vector::zero);
+    
+    forAll(weights, i){
+      vectorField& pw = weights[i];
+      vector &sw = sumWeights[i];
+      forAll(pw, j){
+        vector &ppw = pw[j];
+        for(int ii=0; ii<3; ii++){
+          if( sw[ii]!=0 ){
+            ppw[ii] /= sw[ii];
+          }
+        }
+      }
+    }
+
+    return weights;
+  }
 
 
 
