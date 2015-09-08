@@ -5,7 +5,6 @@
  */
 
 #include "DissolMeshRlx.H"
-#include <algorithm>
 
 #include "Pstream.H"
 
@@ -16,6 +15,7 @@
 
 #include "triPointRef.H"
 
+#include <algorithm>
 
 // mesh1 is the mesh at time 0
 DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
@@ -44,6 +44,9 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
     Pout<< "After pn: " << pn  << nl;
     std::exit(0);
   */
+  
+  Time& time = const_cast<Time&>(mesh_.time());
+  deltaT = time.deltaTValue();
 }
 
 vectorField DissolMeshRlx::normalsOnTheEdge(){
@@ -385,9 +388,11 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
   // new points coordinates
   pointField curWallBP = wallBP + wallDispl;
 
+  pointField curWallBP1 = wallBP + deltaT*wallDispl;
+
   // new faceCentres and faceNormals
   //pointField faceCs = faceCentres(curWallBP, llf);
-  vectorField faceNs = faceNormals(curWallBP, llf);
+  vectorField faceNs = faceNormals(curWallBP1, llf);
   coupledPatchInterpolation patchInterpolator( mesh_.boundaryMesh()[wallID], mesh_ );
   vectorField pointNs = patchInterpolator.faceToPointInterpolate(faceNs);
   
@@ -431,7 +436,7 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
     forAll(local_wall_WallsInletEdges, i){
       displacement[i].z() = (maxZ - edgePoints[i].z());
     }
-    vectorField proj_disp = transform(I - edgeNorms*edgeNorms/8.0, displacement);
+    vectorField proj_disp = transform(I - edgeNorms*edgeNorms, displacement);
     //vectorField proj_disp = (displacement + transform(I - edgeNorms*edgeNorms*2.0, displacement))/2.0;
     
     /*
@@ -442,7 +447,6 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
               <<edgeNorms[0]<<"  aa "
               <<aa<<"  "
               <<nl;
-    
     }
     */
     
@@ -499,9 +503,10 @@ vectorField DissolMeshRlx::calculateOutletDisplacement(vectorField& wallDispl){
   // new points coordinates
   pointField curWallBP = wallBP+wallDispl;
   
+  pointField curWallBP1 = wallBP + deltaT*wallDispl;
 
   //pointField faceCs = faceCentres(curWallBP, llf);
-  vectorField faceNs = faceNormals(curWallBP, llf);
+  vectorField faceNs = faceNormals(curWallBP1, llf);
   coupledPatchInterpolation patchInterpolator( mesh_.boundaryMesh()[wallID], mesh_ );
   vectorField pointNs = patchInterpolator.faceToPointInterpolate(faceNs);
   

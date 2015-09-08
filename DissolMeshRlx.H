@@ -58,6 +58,8 @@ private:
   const float version;
 
   const fvMesh& mesh_;
+  
+  scalar deltaT;
 
   // ID of each patch
   label wallID, inletID, outletID;
@@ -283,7 +285,7 @@ public:
 
   
   template<class Patch>
-  vectorField wallRelaxation(Patch& patch_, const scalarListList& weights, double rlxTol){
+  vectorField wallRelaxation(Patch& patch_, const vectorFieldList& weights, double rlxTol){
     const List<face>& llf = patch_.localFaces();
     const labelList& meshPoints = patch_.meshPoints();
     const labelListList& plistFaces = patch_.pointFaces();
@@ -308,7 +310,7 @@ public:
       forAll(boundaryPoints, i){
         point& curP = boundaryPoints[i];
         const labelList& pFaces = plistFaces[i];
-        const scalarList& pw = weights[i];
+        const vectorField& pw = weights[i];
 
         forAll(pFaces, j){
           label faceI = pFaces[j];
@@ -319,12 +321,12 @@ public:
           scalar mag_d = mag(d);
           
           vector disp;
-          disp.x() = d.x() * 0.25;
-          disp.y() = d.y() * 0.25;
-          disp.z() = d.z() * pw[j];
+          disp.x() = d.x() * pw[j].x();
+          disp.y() = d.y() * pw[j].y();
+          disp.z() = d.z() * pw[j].z();
           displacement[i] += disp;
           
-          tol[i] += mag_d * pw[j];
+          tol[i] += mag_d * mag(pw[j]);
           
           // this is for normal
           scalar nw = 1.0 / mag_d;
@@ -485,9 +487,9 @@ public:
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
-      //scalar factor = 1.0;
-      scalar factor = 5.5;
-      if(itt%2==0) factor = 1.17;
+      scalar factor = 1.0;
+      //scalar factor = 5.5;
+      //if(itt%2==0) factor = 1.17;
       vectorField finalDisplacement = factor * projectedDisplacement;
       
       boundaryPoints += finalDisplacement;
@@ -512,11 +514,9 @@ public:
       
       itt+=1;
       
-      
       //if(itt%40000==0){
       //  break;
       //}
-      
     }
     Info<< patch_.name() << "  converged in "<< itt 
             << " iterations. Tolerance: " << displ_tol<< nl;
@@ -549,7 +549,6 @@ public:
     
     double displ_tol = 1.0;
     int itt = 0;
-    
     
     while(displ_tol>rlxTol){
       
@@ -606,13 +605,6 @@ public:
           scalar nw = 1.0 / mag_d;
           pointNorm[i] += nw * faceNs[ faceI ];
           faceToPointSumWeights[i] += nw;
-          
-          /*
-          if(i==8265){
-            Info<<"nw  "<< nw << "   faceNs " << faceNs[ faceI ] <<nl<<nl;
-          }
-          */
-          
         }
         
       }
@@ -847,9 +839,14 @@ public:
       
       reduce(displ_tol, sumOp<scalar>());
       reduce(displ_tol_norm, sumOp<scalar>());
-      displ_tol /= displ_tol_norm;
-      
-      displacement = newDisplacement;
+      if(displ_tol_norm!=0.0){
+        displ_tol /= displ_tol_norm;
+      }
+      else{
+        displ_tol = 0.0;
+      }
+        
+        displacement = newDisplacement;
       
       if(itt%1000==0){
         Info<<patch_.name()<<"  rlx iter "<<itt
@@ -875,7 +872,7 @@ public:
 
   
   template<class Patch>
-  scalarListList calc_weights(const Patch& patch_, scalar lambda, int dir){
+  vectorFieldList calc_weights(const Patch& patch_, scalar lambda){
 
     const labelList& meshPoints = patch_.meshPoints();
 
@@ -883,75 +880,59 @@ public:
     const labelListList& plistFaces = patch_.pointFaces();
     const pointField& faceCs = patch_.faceCentres();
     
-    scalarListList weights( boundaryPoints.size() );
-    scalarField sumWeights( boundaryPoints.size() );
+    vectorFieldList weights( boundaryPoints.size() );
+    vectorField sumWeights( boundaryPoints.size() );
 
     forAll(boundaryPoints, i){
       point curP = boundaryPoints[i];
       const labelList& pFaces = plistFaces[i];
 
-      scalarList& pw = weights[i];
+      vectorField& pw = weights[i];
       pw.setSize(pFaces.size());
       
-      scalar sumw = 0.0;
+      vector sumw = vector::zero;
       forAll(pFaces, j){
         label faceI = pFaces[j];
         point faceC = faceCs[faceI];
 
         vector d = faceC - curP;
-        switch (dir){
-          case 1:
-          {
-            if( std::abs(d.x()) < SMALL  ){
-              Info<< "SMALLLLLLLLLLLLLL:   " << curP << "  " << faceC << endl;
-              pw[j] = 1.0;
-            }
-            else{
-              pw[j] = (1 - 0.5 * lambda * d.x()/std::abs(d.x()) * faceC.x()/std::abs(faceC.x()) );
-            }
-            break;
+        vector w = vector::zero;
+        
+        for(int ii=0; ii<3; ii++){
+          if( mag(d[ii]) < SMALL  ){
+            //Info<< "SMALLLLLLLLLLLLLL:   " << curP << "  " << faceC << endl;
+            w[ii] = 1.0;
           }
-          case 2:
-          {
-            if( std::abs(d.y()) < SMALL  ){
-              Info<< "SMALLLLLLLLLLLLLL:   " << curP << "  " << faceC << endl;
-              pw[j] = 1.0;
-            }
-            else{
-              pw[j] = (1 - 0.5 * lambda * d.y()/std::abs(d.y()) * faceC.y()/std::abs(faceC.y()) );
-            }
-            break;
+          else{
+            if(ii==2)
+              w[ii] = (1 - 0.5 * lambda * d.z()/mag(d.z()) * faceC.z()/mag(faceC.z()) );
+            else
+              w[ii] = 1.0 / mag( d[ii] );
           }
-          case 3:
-          {
-            if( std::abs(d.z()) < SMALL  ){
-              Info<< "SMALLLLLLLLLLLLLL:   " << curP << "  " << faceC << endl;
-              pw[j] = 1.0;
-            }
-            else{
-              pw[j] = (1 - 0.5 * lambda * d.z()/std::abs(d.z()) * faceC.z()/std::abs(faceC.z()) );
-            }
-            break;
-          }
-          default:
-          // TODO Error
-            ;
         }
+        
+        pw[j] = w;
         sumw += pw[j];
       }
       // sum of all distances to face centres
       sumWeights[i] = sumw;
     }
   
-    syncTools::syncPointList( mesh_, meshPoints, sumWeights, plusEqOp<scalar>(), 0.0);
+    syncTools::syncPointList( mesh_, meshPoints, sumWeights, plusEqOp<vector>(), vector::zero);
     
     forAll(weights, i){
-      scalarList& pw = weights[i];
+      vectorField& pw = weights[i];
+      vector &sw = sumWeights[i];
       forAll(pw, j){
-        pw[j] /= sumWeights[i];
+        vector &ppw = pw[j];
+        for(int ii=0; ii<3; ii++){
+          if( sw[ii]!=0 ){
+            ppw[ii] /= sw[ii];
+          }
+        }
       }
     }
-
+    
     return weights;
   }
   

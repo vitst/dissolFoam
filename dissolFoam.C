@@ -133,7 +133,14 @@ int main(int argc, char *argv[])
     dissolProperties.lookupOrDefault<word>("newInletConcentration", "none")
   );
   
+  // if true it switches on convection term in Navier-Stokes eqn
+  bool NavierStokesConvection
+  (
+    dissolProperties.lookupOrDefault<bool>("NavierStokesConvection", false)
+  );
   scalar l_T( dissolProperties.lookupOrDefault<scalar>("lT", 1.0) );
+  
+  scalar Re( dissolProperties.lookupOrDefault<scalar>("Re", 1.0/nu.value()) );
   
   scalar rlxTol( dissolProperties.lookupOrDefault<scalar>("relaxationTolerance", 0.1) );
   
@@ -258,8 +265,15 @@ int main(int argc, char *argv[])
       steadyStateControl simple(mesh);
       while ( simple.loop() ){
         // Pressure-velocity SIMPLE corrector
-        #include "UEqn.H"
-        #include "pEqn.H"
+        if(NavierStokesConvection){
+          #include "UEqnStokes.H"
+          #include "pEqn.H"
+        }
+        else{
+          #include "UEqnNavierStokesConv.H"
+          #include "pEqn.H"
+        }
+        //#include "pEqn.H"
         //turbulence->correct();
       }
       
@@ -559,21 +573,20 @@ int main(int argc, char *argv[])
     // *********************************************************************************
     // @TODO make it nice
     
-    scalarListList wallWeightsS;
+    //scalarListList wallWeightsS;
     if( varG ){
       Info<<nl<<"Calculating new Z grading...."<<nl;
 
       scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
       scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
-      wallWeightsS = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ, 3);
+      wallWeightsV = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ);
       //scalarListList wallWeights = mesh_rlx->calc_weights_faces( mesh.boundaryMesh()[wallID]);
     }
-    const scalarListList& wWs = wallWeightsS;
+    //const scalarListList& wWs = wallWeightsS;
     
     //Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz <<nl<<nl;
     
     // *********************************************************************************
-    
     
     pointField savedPointsAll = mesh.points();
     
@@ -629,7 +642,7 @@ int main(int argc, char *argv[])
     Info<<"Relaxing the wall... time: "<< runTime.cpuTimeIncrement() <<nl;
     vectorField wallRelax;
     if( varG ){
-      wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID], wWs, rlxTol);
+      wallRelax = mesh_rlx->wallRelaxation( mesh.boundaryMesh()[wallID], wWv, rlxTol);
     }
     else{
       wallRelax = mesh_rlx->wallRelaxation2( mesh.boundaryMesh()[wallID], wWv, rlxTol);
