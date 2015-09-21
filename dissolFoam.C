@@ -159,6 +159,9 @@ int main(int argc, char *argv[])
   Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
   Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
   Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;
+  
+  Info << "dissolFoamDict, NavierStokesConvection:  " << NavierStokesConvection <<nl;
+  Info << "dissolFoamDict, Re:  " << Re <<nl;
   Info << "*****************************************************************"<<nl;
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
@@ -266,11 +269,11 @@ int main(int argc, char *argv[])
       while ( simple.loop() ){
         // Pressure-velocity SIMPLE corrector
         if(NavierStokesConvection){
-          #include "UEqnStokes.H"
+          #include "UEqnNavierStokesConv.H"
           #include "pEqn.H"
         }
         else{
-          #include "UEqnNavierStokesConv.H"
+          #include "UEqnStokes.H"
           #include "pEqn.H"
         }
         //#include "pEqn.H"
@@ -590,6 +593,7 @@ int main(int argc, char *argv[])
     
     pointField savedPointsAll = mesh.points();
     
+    /*
     if( dissolDebug ){
       const vectorField& wR = pointDispWall;
       pointField mpW = mesh_rlx->doWallDisplacement( wR * runTime.deltaTValue() );
@@ -600,6 +604,7 @@ int main(int argc, char *argv[])
       
       mesh.movePoints( savedPointsAll );
     }
+    */
     
     vectorField pointDispInlet = mesh_rlx->calculateInletDisplacement(pdw);
     vectorField pointDispOutlet = mesh_rlx->calculateOutletDisplacement(pdw);
