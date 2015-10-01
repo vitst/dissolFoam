@@ -39,6 +39,8 @@ Description
 // OF simpleFoam
 #include "singlePhaseTransportModel.H"
 #include "fvIOoptionList.H"
+#include "RASModel.H"
+
 
 // OFe
 #include "pointPatchField.H"
@@ -271,6 +273,7 @@ int main(int argc, char *argv[])
         if(NavierStokesConvection){
           #include "UEqnNavierStokesConv.H"
           #include "pEqn.H"
+          turbulence->correct();
         }
         else{
           #include "UEqnStokes.H"
