@@ -487,7 +487,7 @@ public:
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
-      scalar factor = 1.0;
+      scalar factor = 0.5;
       //scalar factor = 5.5;
       //if(itt%2==0) factor = 1.17;
       vectorField finalDisplacement = factor * projectedDisplacement;
@@ -1068,16 +1068,14 @@ public:
         vector w = vector::zero;
         
         for(int ii=0; ii<3; ii++){
-          if(d[ii]!=0){
+          if(mag(d[ii])>SMALL){
             w[ii] = 1.0 / std::abs( d[ii] );
-            //if(ii!=2) w[ii] = 1.0;
           }
           else{
             w[ii] = 0.0;
           }
         }
         
-        //pw[j] = (1 - 0.5 * lambda * d.x()/std::abs(d.x()) * faceC.x()/std::abs(faceC.x()) );
         pw[j] = w;
         sumw += pw[j];
       }
@@ -1094,7 +1092,7 @@ public:
       forAll(pw, j){
         vector &ppw = pw[j];
         for(int ii=0; ii<3; ii++){
-          if( sw[ii]!=0 ){
+          if( mag(sw[ii])>SMALL ){
             ppw[ii] /= sw[ii];
           }
         }

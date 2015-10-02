@@ -175,43 +175,6 @@ int main(int argc, char *argv[])
   Info << "dissolFoamDict, NavierStokesConvection:  " << NavierStokesConvection <<nl;
   Info << "dissolFoamDict, Re:  " << Re <<nl;
   Info << "*****************************************************************"<<nl;
-  // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-  
-  //Info<<nl<<"!!! Set timescale dt to l_T*dt !!!"<<nl;
-  //runTime.setDeltaT(l_T*runTime.deltaTValue());
-  //Info<<"New dt= "<<runTime.deltaTValue()<<nl<<nl;
-  
-/*
-  int numPatches = mesh.boundaryMesh().size();
-  wordList boundaryTypes(numPatches, "zeroGradient");
-  
-  boundaryTypes.append("zeroGradient");
-  boundaryTypes.append("fixedValue");
-  boundaryTypes.append("zeroGradient");
-  boundaryTypes.append("cyclic");
-  boundaryTypes.append("cyclic");
-
-  volScalarField Kinv(
-	IOobject(
-		"Kinv",
-		runTime.timeName(),
-		mesh,
-		IOobject::READ_IF_PRESENT,
-		IOobject::AUTO_WRITE
-	),
-	mesh,
-	//dimensionedScalar("K", dimensionSet(0,2,-2,0,0,0,0), 0.0),
-	dimensionedScalar("Kinv", dimless, 1.0),
-	boundaryTypes
-  );
-
-  Pout<<numPatches<< nl << Kinv << nl;
-
-*/
-  //scalar aa= -3.9999999999999;
-  //Info<<nl<<mag(aa)<<"   "<<aa<<nl;
-  //std::exit(0);
-  // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
@@ -219,10 +182,10 @@ int main(int argc, char *argv[])
   label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
   Info<< "Setup mesh relaxation class" << endl;
-  // reference to the mesh relaxation object
+  // pointer to the mesh relaxation object
   DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh);
   
-  // calculating initial area of the inlet
+  // calculating initial area of the inlet in order to scale U later
   scalar areaCoef0 = 0.0;
   const surfaceScalarField& magSf2 = mesh.magSf();
   forAll(magSf2.boundaryField()[inletID], facei){
@@ -231,34 +194,34 @@ int main(int argc, char *argv[])
   reduce(areaCoef0, sumOp<scalar>());
   
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+  
   /*
-   * run0timestep is used for skipping the Stokes and the convection-diffusion solvers
+   * run0timestep is used to skip the Navier-Stokes and the convection-diffusion solvers
    * if timestep is not 0. At the end of each cycle it is set to true.
    */
   bool run0timestep = false;
   if( runTime.value() == 0 ){  run0timestep = true; }
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
+  //const cellList & cc = mesh.cells();
+  //Info<<cc<<nl; 
+  //std::exit(0);
   
-  /*
-  const polyPatch& inlPatch = mesh.boundaryMesh()[inletID];
-  const surfaceScalarField& magSf = mesh.magSf();
-
-  scalar inletArea0 = 0.0;
-  forAll(inlPatch, facei)
-  {
-    inletArea0 += magSf.boundaryField()[inletID][facei];
-  }
-  reduce(areaCoef0, maxOp<scalar>());
-  */
-
   vectorFieldList wallWeightsV;
-  
-  
   if( !varG ){
     wallWeightsV = mesh_rlx->calc_weights2( mesh.boundaryMesh()[wallID]);
   }
   const vectorFieldList& wWv = wallWeightsV;
+  
+  /*
+  pointField ppp = mesh.boundaryMesh()[wallID].localPoints();
+  forAll(ppp, iii){
+    if(ppp[iii].z()<2.0)
+      Info<<wWv[iii]<<nl; 
+  }
+  std::exit(0);
+  */
+  
   
   vectorFieldList inletWeightsV = mesh_rlx->calc_edge_weights( mesh.boundaryMesh()[inletID]);
   vectorFieldList outletWeightsV = mesh_rlx->calc_edge_weights( mesh.boundaryMesh()[outletID]);
@@ -296,8 +259,6 @@ int main(int argc, char *argv[])
       /*##########################################
        *   Keeping flow rate constant
        *##########################################*/
-      
-      
       scalar magU = mag( fvc::domainIntegrate( U ).value() );
       
       vectorField po = mesh.points();
@@ -305,17 +266,6 @@ int main(int argc, char *argv[])
       reduce(maxZ, maxOp<scalar>());
       scalar minZ = min( po.component(vector::Z) );
       reduce(minZ, minOp<scalar>());
-      
-      /*
-      Pout<<nl<< " magU= "<< magU
-              <<nl
-              <<" H= "<< (maxZ-minZ)
-              <<nl
-              <<" area= "<< areaCoef0
-              <<nl<<nl;
-      
-      exit(0);
-      */
       
       scalar nU = magU / (maxZ-minZ) / areaCoef0;
       
