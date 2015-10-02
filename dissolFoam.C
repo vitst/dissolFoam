@@ -2,7 +2,7 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | Copyright (C) 2011-2013 OpenFOAM Foundation
+    \\  /    A nd           | Copyright (C) 2011-201X OpenFOAM Foundation
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
 License
@@ -31,8 +31,7 @@ Description
 
 #include <gsl/gsl_sf_hyperg.h>
 
-// OF includes
-
+//// OF includes
 // common OFe solver and OF simpleFoam
 #include "fvCFD.H"
 
@@ -40,7 +39,6 @@ Description
 #include "singlePhaseTransportModel.H"
 #include "fvIOoptionList.H"
 #include "RASModel.H"
-
 
 // OFe
 #include "pointPatchField.H"
@@ -52,7 +50,7 @@ Description
 #include "coupledPatchInterpolation.H"
 #include "DissolMeshRlx.H"
 
-
+//// auxiliary includes
 // mesh search
 #include "interpolation.H"
 #include "triSurface.H"
@@ -120,32 +118,43 @@ int main(int argc, char *argv[])
     )
   );
 
+  // if true the solver will be stopped after a single iteration, writing to the disk
+  // three times: overwriting 0, mesh with moved surface, relaxed mesh.
   bool dissolDebug
   (
     dissolProperties.lookupOrDefault<bool>("dissolDebug", false)
   );
   
+  // if true the concentration for the points at the edge between wall and inlet
+  // will be modified
   bool fixInletConcentration
   (
     readBool( dissolProperties.lookup("fixInletConcentration") )
   );
 
+  // defines the inlet boundary for the C field
   word newInletConcentration
   (
     dissolProperties.lookupOrDefault<word>("newInletConcentration", "none")
   );
   
-  // if true it switches on convection term in Navier-Stokes eqn
+  // if true it switches on the convection term in Navier-Stokes eqn
   bool NavierStokesConvection
   (
     dissolProperties.lookupOrDefault<bool>("NavierStokesConvection", false)
   );
+  
+  // l_T=D/(k*h_0)
   scalar l_T( dissolProperties.lookupOrDefault<scalar>("lT", 1.0) );
   
+  // Reynolds number
   scalar Re( dissolProperties.lookupOrDefault<scalar>("Re", 1.0/nu.value()) );
   
+  // a tolerance for the relaxation cycles
   scalar rlxTol( dissolProperties.lookupOrDefault<scalar>("relaxationTolerance", 0.1) );
   
+  // if true the grading in Z direction will change with time in accordance to the
+  // formula G = inigradingZ/(timeCoef*t+1)
   bool varG
   (
     dissolProperties.lookupOrDefault<bool>("varG", false)
@@ -153,6 +162,7 @@ int main(int argc, char *argv[])
   scalar inigradingZ( dissolProperties.lookupOrDefault<scalar>("inigradingZ", 1.0) );
   scalar timeCoefZ( dissolProperties.lookupOrDefault<scalar>("timeCoefZ", 1.0) );
   int Nz( dissolProperties.lookupOrDefault<int>("numberOfCellsZ", 10) );
+  
   
   Info << "*****************************************************************"<<nl;
   Info << "dissolFoamDict, fixInletConcentration:  " << fixInletConcentration <<nl;
