@@ -49,6 +49,27 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh)
   deltaT = time.deltaTValue();
 }
 
+pointField DissolMeshRlx::tempMove(){
+  pointField newPoints = mesh_.points();
+  
+  const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();
+  pointField boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();
+  vectorField faceNs = faceNormals(boundaryPoints, llf);
+  coupledPatchInterpolation patchInterpolator( mesh_.boundaryMesh()[wallID], mesh_ );
+  vectorField pointNs = patchInterpolator.faceToPointInterpolate(faceNs);
+  
+  forAll(pointNs, i){
+    label indx = wallsToAll[i];
+    if(pointNs[i].y()<0.0){
+      newPoints[indx].y()=-0.5;
+    }else{
+      newPoints[indx].y()= 0.5;
+    }
+  }
+  return newPoints;
+}
+
+
 vectorField DissolMeshRlx::normalsOnTheEdge(){
 
   const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();

@@ -111,6 +111,9 @@ public:
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+  pointField tempMove();
+  
+  
   void fixEdgeConcentration( vectorField& );
   
   void fixEdgeConcentration1( vectorField&, scalarField&, vectorField&, scalarField&);

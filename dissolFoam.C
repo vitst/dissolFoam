@@ -38,7 +38,7 @@ Description
 // OF simpleFoam
 #include "singlePhaseTransportModel.H"
 #include "fvIOoptionList.H"
-#include "RASModel.H"
+//#include "RASModel.H"  // currently no turbulence model
 
 // OFe
 #include "pointPatchField.H"
@@ -120,29 +120,10 @@ int main(int argc, char *argv[])
 
   // if true the solver will be stopped after a single iteration, writing to the disk
   // three times: overwriting 0, mesh with moved surface, relaxed mesh.
-  bool dissolDebug
-  (
-    dissolProperties.lookupOrDefault<bool>("dissolDebug", false)
-  );
-  
-  // if true the concentration for the points at the edge between wall and inlet
-  // will be modified
-  bool fixInletConcentration
-  (
-    readBool( dissolProperties.lookup("fixInletConcentration") )
-  );
-
-  // defines the inlet boundary for the C field
-  word newInletConcentration
-  (
-    dissolProperties.lookupOrDefault<word>("newInletConcentration", "none")
-  );
+  bool dissolDebug(dissolProperties.lookupOrDefault<bool>("dissolDebug", false) );
   
   // if true it switches on the convection term in Navier-Stokes eqn
-  bool NavierStokesConvection
-  (
-    dissolProperties.lookupOrDefault<bool>("NavierStokesConvection", false)
-  );
+  bool NStokesInertia(dissolProperties.lookupOrDefault<bool>("NStokesInertia", false));
   
   // l_T=D/(k*h_0)
   scalar l_T( dissolProperties.lookupOrDefault<scalar>("lT", 1.0) );
@@ -155,10 +136,7 @@ int main(int argc, char *argv[])
   
   // if true the grading in Z direction will change with time in accordance to the
   // formula G = inigradingZ/(timeCoef*t+1)
-  bool varG
-  (
-    dissolProperties.lookupOrDefault<bool>("varG", false)
-  );
+  bool varG( dissolProperties.lookupOrDefault<bool>("varG", false));
   scalar inigradingZ( dissolProperties.lookupOrDefault<scalar>("inigradingZ", 1.0) );
   scalar timeCoefZ( dissolProperties.lookupOrDefault<scalar>("timeCoefZ", 1.0) );
   int Nz( dissolProperties.lookupOrDefault<int>("numberOfCellsZ", 10) );
@@ -172,7 +150,7 @@ int main(int argc, char *argv[])
   Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
   Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;
   
-  Info << "dissolFoamDict, NavierStokesConvection:  " << NavierStokesConvection <<nl;
+  Info << "dissolFoamDict, NStokesInertia:  " << NStokesInertia <<nl;
   Info << "dissolFoamDict, Re:  " << Re <<nl;
   Info << "*****************************************************************"<<nl;
   
@@ -182,8 +160,7 @@ int main(int argc, char *argv[])
   label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
   Info<< "Setup mesh relaxation class" << endl;
-  // pointer to the mesh relaxation object
-  DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh);
+  DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh); // pointer to the mesh relaxation object
   
   // calculating initial area of the inlet in order to scale U later
   scalar areaCoef0 = 0.0;
@@ -203,25 +180,11 @@ int main(int argc, char *argv[])
   if( runTime.value() == 0 ){  run0timestep = true; }
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-  //const cellList & cc = mesh.cells();
-  //Info<<cc<<nl; 
-  //std::exit(0);
-  
   vectorFieldList wallWeightsV;
   if( !varG ){
     wallWeightsV = mesh_rlx->calc_weights2( mesh.boundaryMesh()[wallID]);
   }
   const vectorFieldList& wWv = wallWeightsV;
-  
-  /*
-  pointField ppp = mesh.boundaryMesh()[wallID].localPoints();
-  forAll(ppp, iii){
-    if(ppp[iii].z()<2.0)
-      Info<<wWv[iii]<<nl; 
-  }
-  std::exit(0);
-  */
-  
   
   vectorFieldList inletWeightsV = mesh_rlx->calc_edge_weights( mesh.boundaryMesh()[inletID]);
   vectorFieldList outletWeightsV = mesh_rlx->calc_edge_weights( mesh.boundaryMesh()[outletID]);
@@ -243,17 +206,14 @@ int main(int argc, char *argv[])
       steadyStateControl simple(mesh);
       while ( simple.loop() ){
         // Pressure-velocity SIMPLE corrector
-        if(NavierStokesConvection){
+        if(NStokesInertia){
           #include "UEqnNavierStokesConv.H"
           #include "pEqn.H"
-          turbulence->correct();
         }
         else{
           #include "UEqnStokes.H"
           #include "pEqn.H"
         }
-        //#include "pEqn.H"
-        //turbulence->correct();
       }
       
       /*##########################################
@@ -270,216 +230,56 @@ int main(int argc, char *argv[])
       scalar nU = magU / (maxZ-minZ) / areaCoef0;
       
       U==U/nU;
+      // #########################################
       
-      // ***************************************************************************
-      // Calculating different boundary condition for the C field on the inlet
-      if(newInletConcentration=="parabolic"||newInletConcentration=="hypergeometric" ){
-        
-        // if the "parabolic" or "hypergeometric" option, we need to know the aperture
-        // of the fracture at the inlet
-        labelHashSet includePatches(1);
-        includePatches.insert(wallID);
-        triSurface wallTriSurface
-        (
-          triSurfaceTools::triangulate( mesh.boundaryMesh(), includePatches )
-        );
-        const triSurfaceSearch querySurf(wallTriSurface);
-        const indexedOctree<treeDataTriSurface>& tree = querySurf.tree();
-        bool pm = false, mp = false;
-
-        pointField pointFaceCntr = mesh.boundaryMesh()[inletID].faceCentres();
-        scalarField Cinlet( pointFaceCntr.size() );
-        
-        interpolationTable<scalar> sherwoodNumTab ("Sh.dat");
-
-        scalar lp = 0.5;
-
-        forAll(Cinlet, i){
-          point p = pointFaceCntr[i];
-          point searchStart = p;
-          searchStart.y() = 0.0;
-          searchStart.z() += 0.01;
-          point searchEnd = searchStart;
-          searchStart.y() = 500.0;
-
-          point maxY = p;
-          pointIndexHit pHit = tree.findLine(searchStart, searchEnd);
-          if ( pHit.hit() )
-          {
-            maxY =  pHit.hitPoint();
-            pm = true;
-          }
-          else{
-          }
-
-          point minY = p;
-          searchStart.y() = -500.0;
-          pHit = tree.findLine(searchStart, searchEnd);
-          if ( pHit.hit() )
-          {
-            minY = pHit.hitPoint();
-            mp = true;
-          }
-          else{
-          }
-
-          if(pm && !mp){
-            Info<<"WARNING! The ray did not find the surface from + direction"<<nl;
-          }
-          else if(!pm && mp){
-            Info<<"WARNING! The ray did not find the surface from - direction"<<nl;
-          }
-          else if(!pm && !mp){
-            Info<<"WARNING! The ray did not find the surface from both direction"<<nl;
-          }
-
-          scalar h = mag(maxY-minY);
-          if(h == 0.0){
-            Info<<"h=0  "<< p << "   "<< min(mesh.boundaryMesh()[wallID].localPoints().component(vector::Z))<<nl;
-          }
-        
-          if( newInletConcentration == "hypergeometric" ){
-            // the concentration profile based on Hypergeometric function
-            //scalar Sh = 8.0;
-            scalar G = 2*h/lp;
-            scalar Sh = sherwoodNumTab( Foam::log10(G) );
-            scalar lam = Sh / (G+Sh);
-            scalar r  = Foam::sqrt( 3*G*lam/8 );
-            scalar yh = (p.y() + h/2.) / h;
-            scalar gz = gsl_sf_hyperg_1F1( 0.25*(1-r), 0.5, r*(2*yh-1)*(2*yh-1) ) * Foam::exp(-2 * r *yh*(yh-1));
-            yh = 0.0;
-            scalar gz0 = gsl_sf_hyperg_1F1( 0.25*(1-r), 0.5, r*(2*yh-1)*(2*yh-1) ) * Foam::exp(-2 * r *yh*(yh-1));
-            scalar fA = lam / gz0;
-
-            Cinlet[i] = fA * gz;
-          }
-          else{
-            // parabolic function
-            scalar a=8.0/(h*h+4*h*lp);
-            Cinlet[i] = 1-a/2.0 * p.y()*p.y();
-            scalar G = 2*h/lp; // = 2kh/D
-            scalar alpha = 4*G/(8+G);
-
-            Cinlet[i] /= 1-alpha/20.0;
-          }
-        }
-
-        C.boundaryField()[inletID] == Cinlet;
-      }
-        
-      if(newInletConcentration=="distanceFunction" ){
-        coupledPatchInterpolation patchInterpolator(mesh.boundaryMesh()[inletID], mesh);
-        scalarField phph = patchInterpolator.faceToPointInterpolate(phi.boundaryField()[inletID]);
-        scalarField & phphr = phph;
-        scalarField newConc = mesh_rlx->newC(phphr, 0.000000001);
-        scalarField Cf = patchInterpolator.pointToFaceInterpolate(newConc);
-        C.boundaryField()[inletID]==Cf;
-      }
-      
-      // ***************************************************************************
-
+      // *********************************************************
+      // Danckwerts boundary condition loop
+      // *********************************************************
       int inlet_count = 0;
       while ( true ){
-      
-        /*############################################
-        *   Steady-state convection-diffusion solver
-        * ##########################################*/
         Info << "Steady-state convection-diffusion"<< endl;
-        // define dictionary for convection diffusion solver
-        dictionary conv_diff = mesh.solutionDict().subDict("CONVECTION_DIFFUSION");
-        // initialize values for convergence checks
-        double convCritCD = 0;   // convergence criteria
-        int maxNumIterCD = 0; // maximum number of iterations
-        // read values for convergence checks from the dictionary
-        conv_diff.readIfPresent("convergence", convCritCD);
-        conv_diff.readIfPresent("maxIter", maxNumIterCD);
-
-        // Steady-state convection-diffusion solver main loop
-        int counter = 0;
-        while ( true ){
-          counter++;
-
-          double residual = solve
-          (
-            fvm::div(phi, C) - fvm::laplacian(D, C) == fvOptions(C)
-          ).initialResidual();
-
-          if( residual < convCritCD ){
-            Info << "Convection-diffusion: ExecutionTime = " << runTime.elapsedCpuTime() << " s"
-                 << "  ClockTime = " << runTime.elapsedClockTime() << " s"<< nl 
-                 << "Converged in "<< counter <<" steps" << nl << endl;
-            if(counter >= maxNumIterCD){
-              Info<<" dissolFoam Runtime WARNING:"
-                      << " Steady-state convection-diffusion solver did not converge."
-                      << nl
-                      << "It reached maximum number of iterations"
-                      << "  counter: "<< counter
-                      << "  maxNumIterCD: " << maxNumIterCD
-                      << nl;
-            }
-            break;
-          }
-          else{
-            Info<< nl <<" Step "<< counter
-                      <<"  residual: "<< residual
-                      <<" > "<< convCritCD <<nl;
-          }
-        }
+        #include "ConvectionDiffusion.H"
       
-        if(newInletConcentration != "Dankwerts"){
-          break;
-        }
-        
+        // C field at the inlet
         scalarField& oldC = C.boundaryField()[inletID];
-        
         scalarField newC(oldC.size(), 0.0);
         
         const labelList& fc = mesh.boundaryMesh()[inletID].faceCells();
         const vectorField& fcr = mesh.boundaryMesh()[inletID].faceCentres();
         const vectorField& ccr = mesh.cellCentres();
         forAll(fc, ii){
-          //newC[ii] = C[fc[ii]];
-          vector vdel = fcr[ii]-ccr[fc[ii]];
-          scalar del = std::abs(vdel.z());
-          //scalar del = mag(vdel);
+          label fcL = fc[ii]; // label of the cell the face belong to
+          vector vdel = fcr[ii]-ccr[fcL];
+          scalar del = mag(vdel.z());
           
-          scalar aa = D.value() / ( std::abs(U[fc[ii]].z()) * del);
-          newC[ii] = (1+aa*C[fc[ii]])/(1+aa);
+          scalar aa = D.value() / ( mag(U[fcL].z()) * del);
+          newC[ii] = (1+aa*C[fcL])/(1+aa);
         }
-        
         scalarField diff = newC - oldC;
-        
         C.boundaryField()[inletID]==newC;
         
-        scalar ttt = std::abs( gSum( diff ) );
+        scalar ttt  = mag( gSum( diff ) );
         reduce(ttt, sumOp<scalar>());
-        scalar tttn =std::abs( gSum( C.boundaryField()[inletID] ) );
+        scalar tttn = mag( gSum( newC ) );
         reduce(tttn, sumOp<scalar>());
         
         scalar tttol = 0.0;
-        if( tttn!=0.0 ){
-          tttol = ttt/tttn;
-        }
+        if( tttn!=0.0 ) tttol = ttt/tttn;
 
         Info<<"Inlet C iter "<<inlet_count<<"  tolerance: "<<tttol<< nl;
         inlet_count+=1;
         
-        if(tttol<convCritCD){
-          break;
-        }
-        
+        if(tttol<convCritCD) break;
       }
       
       
-      /*############################################################################
+      /*##################################################
        *   Write Output data
-       * ###########################################################################*/
-      if( runTime.value() == 0 ){ 
+       * #################################################*/
+      if( runTime.value() == 0 )
         runTime.writeNow(); 
-      }
-      else{
+      else
         runTime.write();
-      }
       Info<< "Write data, after conv-diff" << nl << nl;
     }
     else{
@@ -487,87 +287,49 @@ int main(int argc, char *argv[])
     }
     runTime++;
     
-    /*##############################################################################
+    /*####################################################
     *   Mesh motion & relaxation
-    * ##############################################################################*/
+    * ####################################################*/
     
     pointVectorField& pointVelocity = const_cast<pointVectorField&>(
       mesh.objectRegistry::lookupObject<pointVectorField>( "pointMotionU" )
     );
 
-    // Mesh update: Calculate new displacements (interpolate C field to points)  
+//  Mesh update 1: Calculate new displacements (interpolate C field to points)  
 
     // interpolate the concentration from cells to wall faces
     coupledPatchInterpolation patchInterpolator( mesh.boundaryMesh()[wallID], mesh );
     
+    // concentration and normals on the faces
     scalarField pointCface = -C.boundaryField()[wallID].snGrad();
     vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
     
-    //vectorField motionVec = pointCface * pointNface;
-    //vectorField pointDispWall = patchInterpolator.faceToPointInterpolate(motionVec);
-    
     scalarField motionC = patchInterpolator.faceToPointInterpolate(pointCface);
     vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
-    
-    // normalize vertex normals to 1
-    forAll(motionN, ii){
-      motionN[ii]/=mag(motionN[ii]);
-    }
+    // normalize point normals to 1
+    forAll(motionN, ii) motionN[ii]/=mag(motionN[ii]);
     
     vectorField pointDispWall = l_T * motionC*motionN;
     vectorField& pdw = pointDispWall;
     
-    
     if(fixInletConcentration){
       Info << "Fix concentration on the edge between walls and inlet"<< nl;
       mesh_rlx->fixEdgeConcentration(pdw);
-      
-      /*
-      vectorField& motionNp = motionN;
-      scalarField& inlC = C.boundaryField()[inletID];
-      scalarField& walC = C.boundaryField()[wallID];
-      mesh_rlx->fixEdgeConcentration1(pdw, inlC, motionNp, walC);
-       */
     }
     
-//  Mesh update 2.2: Inlet and outlet displacement
-    //vectorField pointDispInlet = mesh_rlx->calculateInletDisplacement(pdw);
-    //vectorField pointDispOutlet = mesh_rlx->calculateOutletDisplacement(pdw);
-      
-//  Mesh update 5: boundary mesh relaxation
+//  Mesh update 2: boundary mesh relaxation
     
     // *********************************************************************************
-    // @TODO make it nice
-    
-    //scalarListList wallWeightsS;
     if( varG ){
       Info<<nl<<"Calculating new Z grading...."<<nl;
-
       scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
       scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
       wallWeightsV = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ);
-      //scalarListList wallWeights = mesh_rlx->calc_weights_faces( mesh.boundaryMesh()[wallID]);
     }
-    //const scalarListList& wWs = wallWeightsS;
-    
-    //Info<<nl<<"Boundary mesh relaxation. Z grading is "<< Gz <<nl<<nl;
     
     // *********************************************************************************
     
     pointField savedPointsAll = mesh.points();
-    
-    /*
-    if( dissolDebug ){
-      const vectorField& wR = pointDispWall;
-      pointField mpW = mesh_rlx->doWallDisplacement( wR * runTime.deltaTValue() );
-      mesh.movePoints( mpW);
-
-      runTime.write();
-      runTime++;
-      
-      mesh.movePoints( savedPointsAll );
-    }
-    */
     
     vectorField pointDispInlet = mesh_rlx->calculateInletDisplacement(pdw);
     vectorField pointDispOutlet = mesh_rlx->calculateOutletDisplacement(pdw);
@@ -658,12 +420,13 @@ int main(int argc, char *argv[])
     // *********************************************************************************
 
     Info<<"Mesh update: ExecutionTime = "<<runTime.elapsedCpuTime()<<" s"
-                  << "  ClockTime = " << runTime.elapsedClockTime()<<" s"<<nl<<nl;
+        << "  ClockTime = " << runTime.elapsedClockTime()<<" s"<<nl<<nl;
     
+    // if it is Debug mode finalize the run here
     if( dissolDebug ){
       runTime.write();
       runTime++;
-      return 0;  //std::exit(0);
+      return 0;
     }
   
     run0timestep = true;

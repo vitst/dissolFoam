@@ -1,6 +1,6 @@
 This is the OpenFoam solver. It solves for flow (Stokes) and transport (steady-state) and moves
 the mesh according to the reactant flux.
 
-It is desined for OpenFOAM 2.3.0.
+It works with OpenFOAM 2.x.x
 
 

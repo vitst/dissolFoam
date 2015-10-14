@@ -4,7 +4,7 @@
     (
         Re/12.0 * fvm::div(phi, U)
       - fvm::laplacian(nu, U)
-      + turbulence->divDevReff(U)
+      //+ turbulence->divDevReff(U)
       ==
         fvOptions(U)
     );
