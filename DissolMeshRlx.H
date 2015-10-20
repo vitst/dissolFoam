@@ -25,7 +25,7 @@ Application
     auxiliary class for the dissolFoam solver.
 
 Description
-    Contains all mesh relaxation methods.
+    It contains all mesh relaxation methods, mesh motion etc.
   
 Contributors/Copyright:
     Vitaliy Starchenko (2015)
@@ -56,6 +56,7 @@ class DissolMeshRlx{
 private:
 
   const float version;
+  const string date;
 
   const fvMesh& mesh_;
   
@@ -67,11 +68,11 @@ private:
   // vetex ID maps: patch to global
   labelList wallsToAll, inletToAll, outletToAll;
 
-  // list of local (in terms of wall) IDs for walls- inlet and outlet edges
+  // list of local (local for the wall) IDs for walls- inlet and outlet edges
   labelList local_wall_WallsInletEdges;
   labelList local_wall_WallsOutletEdges;
 
-  
+  // list of global IDs for walls- inlet and outlet edges
   labelList global_WallInletEdges;
   labelList global_WallOutletEdges;
   
@@ -83,6 +84,12 @@ private:
   // map for the extrapolation of the concentration on the edge
   // it fixes inlet boundary condition inconsistance
   labelListList inletTriple;
+  
+  // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  bool variableGrading;
+  vectorFieldList wallWeights;
+
+  // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   vector extrapolateVectorLinear(const pointField&, vector&, vector&, const labelList&);
   
@@ -107,16 +114,11 @@ private:
 public:
   
   // Constructors
-  DissolMeshRlx(const fvMesh&);
+  DissolMeshRlx(const fvMesh&, bool);
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-  pointField tempMove();
-  
-  
   void fixEdgeConcentration( vectorField& );
-  
-  void fixEdgeConcentration1( vectorField&, scalarField&, vectorField&, scalarField&);
   
   // fix edge displacement and calculate inlet displ.
   vectorField calculateInletDisplacement( vectorField& );
@@ -127,13 +129,7 @@ public:
   pointField doWallDisplacement(const vectorField&);
   pointField doOutletDisplacement(const vectorField&);
   
-  scalarField distanceToTheEdge(vectorField&);
   vectorField normalsOnTheEdge();
-  
-  
-  scalarField newC(scalarField&, scalar);
-  scalarField newC1(scalarField&, scalar);
-
   
   template<class Patch>
   vectorField edgeRelaxation(Patch& patchIO_, double rlxTol, vectorFieldList& wv){
@@ -166,6 +162,14 @@ public:
     
     // relax edges
     label NN = local_wall_WallEdges.size();
+    label globalNN = NN;
+    reduce(globalNN, sumOp<label>());
+    
+    //Info<<"number of points: "<<globalNN<<nl;
+    if(globalNN<5){
+      return globalDisplacement;
+    }
+    
     labelListList nepe;
     forAll(local_wall_WallEdges, i){
       label ind = local_wall_WallEdges[i];
@@ -448,7 +452,8 @@ public:
           scalar mag_d = mag(d);
           
           vector disp;
-          disp.x() = d.x() * pw[j].x();
+          //disp.x() = d.x() * pw[j].x();
+          disp.x() = d.x() * 0.0;
           disp.y() = d.y() * pw[j].y();
           //disp.x() = d.x() * 0.25;
           //disp.y() = d.y() * 0.25;
@@ -903,7 +908,6 @@ public:
         
         for(int ii=0; ii<3; ii++){
           if( mag(d[ii]) < SMALL  ){
-            //Info<< "SMALLLLLLLLLLLLLL:   " << curP << "  " << faceC << endl;
             w[ii] = 1.0;
           }
           else{
@@ -1061,6 +1065,10 @@ public:
       vectorField& pw = weights[i];
       pw.setSize(pFaces.size());
       
+      //if(pFaces.size()<2){
+      //  Info<<faceCs[pFaces[0]]<<"  "<<curP<<nl;
+      //}
+      
       vector sumw = vector::zero;
       forAll(pFaces, j){
         label faceI = pFaces[j];
@@ -1072,7 +1080,7 @@ public:
         
         for(int ii=0; ii<3; ii++){
           if(mag(d[ii])>SMALL){
-            w[ii] = 1.0 / std::abs( d[ii] );
+            w[ii] = 1.0 / mag( d[ii] );
           }
           else{
             w[ii] = 0.0;
@@ -1091,7 +1099,6 @@ public:
     forAll(weights, i){
       vectorField& pw = weights[i];
       vector &sw = sumWeights[i];
-      //Info<< "sw  " << sw << "     weights: "<< pw << nl;
       forAll(pw, j){
         vector &ppw = pw[j];
         for(int ii=0; ii<3; ii++){

@@ -47,8 +47,8 @@ Description
 
 // dissol prj
 #include "steadyStateControl.H"
-#include "coupledPatchInterpolation.H"
 #include "DissolMeshRlx.H"
+#include "FieldOperations.H"
 
 //// auxiliary includes
 // mesh search
@@ -122,6 +122,10 @@ int main(int argc, char *argv[])
   // three times: overwriting 0, mesh with moved surface, relaxed mesh.
   bool dissolDebug(dissolProperties.lookupOrDefault<bool>("dissolDebug", false) );
   
+  // if true the concentration for the points at the edge between wall and inlet
+  // will be modified
+  bool fixInletConcentration(readBool(dissolProperties.lookup("fixInletConcentration")));
+  
   // if true it switches on the convection term in Navier-Stokes eqn
   bool NStokesInertia(dissolProperties.lookupOrDefault<bool>("NStokesInertia", false));
   
@@ -144,7 +148,6 @@ int main(int argc, char *argv[])
   
   Info << "*****************************************************************"<<nl;
   Info << "dissolFoamDict, fixInletConcentration:  " << fixInletConcentration <<nl;
-  Info << "dissolFoamDict, inlet concentration based on:  " << newInletConcentration <<nl;
   Info << "dissolFoamDict, rlxTol:  " << rlxTol <<nl;
   Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
   Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
@@ -160,21 +163,19 @@ int main(int argc, char *argv[])
   label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
   Info<< "Setup mesh relaxation class" << endl;
-  DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh); // pointer to the mesh relaxation object
+  DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh, varG); // pointer to the mesh relaxation object
+  Info<< "Setup field operation class" << endl;
+  FieldOperations* fieldO = new FieldOperations(); // pointer to the mesh relaxation object
   
   // calculating initial area of the inlet in order to scale U later
-  scalar areaCoef0 = 0.0;
-  const surfaceScalarField& magSf2 = mesh.magSf();
-  forAll(magSf2.boundaryField()[inletID], facei){
-    areaCoef0 += magSf2.boundaryField()[inletID][facei];
-  }
-  reduce(areaCoef0, sumOp<scalar>());
+  scalar areaCoef0 = fieldO->getInletArea(mesh);
   
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   
   /*
-   * run0timestep is used to skip the Navier-Stokes and the convection-diffusion solvers
-   * if timestep is not 0. At the end of each cycle it is set to true.
+   * A variable run0timestep is used to skip the Navier-Stokes and 
+   * the convection-diffusion solvers if current time is not 0.
+   * At the end of each cycle it is set to true.
    */
   bool run0timestep = false;
   if( runTime.value() == 0 ){  run0timestep = true; }
@@ -184,28 +185,34 @@ int main(int argc, char *argv[])
   if( !varG ){
     wallWeightsV = mesh_rlx->calc_weights2( mesh.boundaryMesh()[wallID]);
   }
-  const vectorFieldList& wWv = wallWeightsV;
-  
+    
   vectorFieldList inletWeightsV = mesh_rlx->calc_edge_weights( mesh.boundaryMesh()[inletID]);
   vectorFieldList outletWeightsV = mesh_rlx->calc_edge_weights( mesh.boundaryMesh()[outletID]);
   vectorFieldList& iwv = inletWeightsV;
   vectorFieldList& owv = outletWeightsV;
-
+  
+  
+  /*
+  forAll( mesh.boundaryMesh(), j1){
+    Info<< mesh.boundaryMesh()[j1].type() <<nl;
+  }
+  */
+  
+  
   // MAIN TIME LOOP //
   while (runTime.run())
   {
     Info<< "Begin cycle: Time = " << runTime.timeName() << nl << endl;
     
-    // Skip the Stokes and the convection-diffusion solvers if timestep is not 0
-    // because it was done within the last timestep
+    // At every restart it skips the Stokes and the convection-diffusion solvers
+    // if timestep is not 0 because it was done within the last timestep.
     if( run0timestep )
     {
-      /*##########################################
-       *   Stokes flow
-       *##########################################*/
+// *********************************************************
+// *    Stokes flow
+// *********************************************************
       steadyStateControl simple(mesh);
       while ( simple.loop() ){
-        // Pressure-velocity SIMPLE corrector
         if(NStokesInertia){
           #include "UEqnNavierStokesConv.H"
           #include "pEqn.H"
@@ -216,70 +223,29 @@ int main(int argc, char *argv[])
         }
       }
       
-      /*##########################################
-       *   Keeping flow rate constant
-       *##########################################*/
-      scalar magU = mag( fvc::domainIntegrate( U ).value() );
-      
-      vectorField po = mesh.points();
-      scalar maxZ = max( po.component(vector::Z) );
-      reduce(maxZ, maxOp<scalar>());
-      scalar minZ = min( po.component(vector::Z) );
-      reduce(minZ, minOp<scalar>());
-      
-      scalar nU = magU / (maxZ-minZ) / areaCoef0;
-      
+// *********************************************************
+// *    Keeping flow rate constant
+// *********************************************************
+      scalar nU = fieldO->getConstFlowRateFactor(mesh, U, areaCoef0);
       U==U/nU;
-      // #########################################
       
-      // *********************************************************
-      // Danckwerts boundary condition loop
-      // *********************************************************
+// *********************************************************
+// *    Danckwerts boundary condition loop, Convenction-Diffusion
+// *********************************************************
+      Info << "Steady-state convection-diffusion"<< endl;
       int inlet_count = 0;
       while ( true ){
-        Info << "Steady-state convection-diffusion"<< endl;
         #include "ConvectionDiffusion.H"
-      
-        // C field at the inlet
-        scalarField& oldC = C.boundaryField()[inletID];
-        scalarField newC(oldC.size(), 0.0);
-        
-        const labelList& fc = mesh.boundaryMesh()[inletID].faceCells();
-        const vectorField& fcr = mesh.boundaryMesh()[inletID].faceCentres();
-        const vectorField& ccr = mesh.cellCentres();
-        forAll(fc, ii){
-          label fcL = fc[ii]; // label of the cell the face belong to
-          vector vdel = fcr[ii]-ccr[fcL];
-          scalar del = mag(vdel.z());
-          
-          scalar aa = D.value() / ( mag(U[fcL].z()) * del);
-          newC[ii] = (1+aa*C[fcL])/(1+aa);
-        }
-        scalarField diff = newC - oldC;
-        C.boundaryField()[inletID]==newC;
-        
-        scalar ttt  = mag( gSum( diff ) );
-        reduce(ttt, sumOp<scalar>());
-        scalar tttn = mag( gSum( newC ) );
-        reduce(tttn, sumOp<scalar>());
-        
-        scalar tttol = 0.0;
-        if( tttn!=0.0 ) tttol = ttt/tttn;
-
-        Info<<"Inlet C iter "<<inlet_count<<"  tolerance: "<<tttol<< nl;
+        scalar tttol = fieldO->setConstFlowRateFactor(mesh, U, C, inletID, D.value());
         inlet_count+=1;
-        
+        Info<<"Inlet C iter "<<inlet_count<<"  tolerance: "<<tttol<< nl;
         if(tttol<convCritCD) break;
       }
       
-      
-      /*##################################################
-       *   Write Output data
-       * #################################################*/
-      if( runTime.value() == 0 )
-        runTime.writeNow(); 
-      else
-        runTime.write();
+// *********************************************************
+// *    Write Output data
+// *********************************************************
+      (runTime.value()==0) ? runTime.writeNow() : runTime.write();
       Info<< "Write data, after conv-diff" << nl << nl;
     }
     else{
@@ -287,52 +253,35 @@ int main(int argc, char *argv[])
     }
     runTime++;
     
-    /*####################################################
-    *   Mesh motion & relaxation
-    * ####################################################*/
-    
+// *********************************************************
+// *    Mesh motion & relaxation
+// *********************************************************
     pointVectorField& pointVelocity = const_cast<pointVectorField&>(
       mesh.objectRegistry::lookupObject<pointVectorField>( "pointMotionU" )
     );
 
 //  Mesh update 1: Calculate new displacements (interpolate C field to points)  
-
-    // interpolate the concentration from cells to wall faces
-    coupledPatchInterpolation patchInterpolator( mesh.boundaryMesh()[wallID], mesh );
-    
-    // concentration and normals on the faces
-    scalarField pointCface = -C.boundaryField()[wallID].snGrad();
-    vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
-    
-    scalarField motionC = patchInterpolator.faceToPointInterpolate(pointCface);
-    vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
-    // normalize point normals to 1
-    forAll(motionN, ii) motionN[ii]/=mag(motionN[ii]);
-    
-    vectorField pointDispWall = l_T * motionC*motionN;
+    vectorField pointDispWall = fieldO->getWallPointMotion(mesh, C, l_T, wallID);
     vectorField& pdw = pointDispWall;
-    
     if(fixInletConcentration){
       Info << "Fix concentration on the edge between walls and inlet"<< nl;
       mesh_rlx->fixEdgeConcentration(pdw);
     }
     
 //  Mesh update 2: boundary mesh relaxation
-    
-    // *********************************************************************************
     if( varG ){
       Info<<nl<<"Calculating new Z grading...."<<nl;
       scalar Gz = inigradingZ / (timeCoefZ * runTime.value() + 1.0);
       scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
       wallWeightsV = mesh_rlx->calc_weights( mesh.boundaryMesh()[wallID], lambdaZ);
     }
-    
-    // *********************************************************************************
+    const vectorFieldList& wWv = wallWeightsV;
     
     pointField savedPointsAll = mesh.points();
-    
     vectorField pointDispInlet = mesh_rlx->calculateInletDisplacement(pdw);
     vectorField pointDispOutlet = mesh_rlx->calculateOutletDisplacement(pdw);
+    
+//  Mesh update 3: boundary mesh relaxation
     
     const vectorField& wR = pointDispWall;
     pointField mpW = mesh_rlx->doWallDisplacement( wR * runTime.deltaTValue() );
@@ -346,13 +295,12 @@ int main(int argc, char *argv[])
     pointField mpO = mesh_rlx->doOutletDisplacement( oR * runTime.deltaTValue() );
     mesh.movePoints( mpO );
     
-    if( dissolDebug ){
+    if(dissolDebug){
       runTime.write();
       runTime++;
     }
-    
-    // *********************************************************************************
-    // Relaxing edges. 1D
+
+// Relaxing edges. 1D
     Info<<"Relaxing the inlet-wall edge..."<<nl;
     vectorField wiEdgeRlx = mesh_rlx->edgeRelaxation( mesh.boundaryMesh()[inletID], rlxTol, iwv);
     const vectorField& werI = wiEdgeRlx;
@@ -364,11 +312,9 @@ int main(int argc, char *argv[])
     const vectorField& werO = woEdgeRlx;
     pointField mpWOE = mesh_rlx->doWallDisplacement( werO );
     mesh.movePoints( mpWOE );
-    // *********************************************************************************
     
-
-    // *********************************************************************************
-    // Relaxing surfaces. 2D
+// *********************************************************************************
+// Relaxing surfaces. 2D
     Info<<"Relaxing the wall... time: "<< runTime.cpuTimeIncrement() <<nl;
     vectorField wallRelax;
     if( varG ){
@@ -382,9 +328,9 @@ int main(int argc, char *argv[])
     mesh.movePoints( savedPointsAll );
     
     const vectorField wR1 = wallRelax/runTime.deltaTValue() 
-            + wiEdgeRlx/runTime.deltaTValue()
-            + woEdgeRlx/runTime.deltaTValue()
-            + pointDispWall;
+                          + wiEdgeRlx/runTime.deltaTValue()
+                          + woEdgeRlx/runTime.deltaTValue()
+                          + pointDispWall;
     
     vectorField vvff1 = wR1 * runTime.deltaTValue();
     const vectorField &vvff = vvff1;
