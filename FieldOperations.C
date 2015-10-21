@@ -13,7 +13,10 @@ FieldOperations::FieldOperations()
 
 }
 
-scalar FieldOperations::getConstFlowRateFactor(const fvMesh& mesh, const volVectorField& U, scalar areaCoef0){
+scalar FieldOperations::getConstFlowRateFactor(const fvMesh& mesh, 
+        const volVectorField& U, 
+        scalar areaCoef0)
+{
 
   scalar magU = mag( fvc::domainIntegrate( U ).value() );
 
@@ -28,11 +31,12 @@ scalar FieldOperations::getConstFlowRateFactor(const fvMesh& mesh, const volVect
   return nU;
 }
 
-scalar FieldOperations::setConstFlowRateFactor(const fvMesh& mesh, const volVectorField& U,
-                                volScalarField& C,
-                                label inletID,
-                                scalar D
-        ){
+scalar FieldOperations::calcDanckwerts(const fvMesh& mesh,
+        const volVectorField& U,
+        volScalarField& C,
+        label inletID,
+        scalar D)
+{
   // C field at the inlet
   const scalarField& oldC = C.boundaryField()[inletID];
   scalarField newC(oldC.size(), 0.0);

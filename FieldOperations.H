@@ -61,15 +61,12 @@ public:
   
   scalar getConstFlowRateFactor(const fvMesh&, const volVectorField&, scalar);
 
-  scalar setConstFlowRateFactor(const fvMesh&, const volVectorField&,
-                                volScalarField&,
-                                label, scalar);
+  scalar calcDanckwerts(const fvMesh&, const volVectorField&,
+                        volScalarField&, label, scalar);
   
-  vectorField getWallPointMotion(const fvMesh&, const volScalarField&,
-                                                 scalar, label);
+  vectorField getWallPointMotion(const fvMesh&, const volScalarField&, scalar, label);
   
   scalar getInletArea(const fvMesh&);
-  
 };
 
 

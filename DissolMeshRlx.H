@@ -56,10 +56,10 @@ class DissolMeshRlx{
 private:
 
   const float version;
-  const string date;
+  const word date;
 
-  const fvMesh& mesh_;
-  
+  //fvMesh& mesh_;
+  dynamicFvMesh& mesh_;
   scalar deltaT;
 
   // ID of each patch
@@ -86,9 +86,17 @@ private:
   labelListList inletTriple;
   
   // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  bool fixInletWallEdgeDispl;
+  scalar rlxTol;
+  bool dissolDebug;
+  
   bool variableGrading;
+  scalar inigradingZ;
+  scalar timeCoefZ;
+  int Nz;
   vectorFieldList wallWeights;
-
+  vectorFieldList inletWeights;
+  vectorFieldList outletWeights;
   // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   vector extrapolateVectorLinear(const pointField&, vector&, vector&, const labelList&);
@@ -114,11 +122,13 @@ private:
 public:
   
   // Constructors
-  DissolMeshRlx(const fvMesh&, bool);
+  DissolMeshRlx(dynamicFvMesh&);
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+  void meshUpdate(vectorField&, Time&);
 
-  void fixEdgeConcentration( vectorField& );
+  void fixIWEdgeDispl( vectorField& );
   
   // fix edge displacement and calculate inlet displ.
   vectorField calculateInletDisplacement( vectorField& );

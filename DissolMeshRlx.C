@@ -18,12 +18,11 @@
 #include <algorithm>
 
 // mesh1 is the mesh at time 0
-DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh, bool varG)
+DissolMeshRlx::DissolMeshRlx(dynamicFvMesh& mesh)
 :
   version(0.6),
   date("Oct 2015"),
-  mesh_(mesh),
-  variableGrading(varG)
+  mesh_(mesh)
 {
   // get ID of each patch we need
   wallID   = mesh_.boundaryMesh().findPatchID("walls");
@@ -41,10 +40,168 @@ DissolMeshRlx::DissolMeshRlx( const fvMesh& mesh, bool varG)
   Time& time = const_cast<Time&>(mesh_.time());
   deltaT = time.deltaTValue();
   
+  // reading dissolFoam dictionary
+  IOdictionary dissolProperties
+  (
+    IOobject
+    (
+      "dissolFoamDict",
+      time.system(),
+      mesh,
+      IOobject::MUST_READ,
+      IOobject::NO_WRITE
+    )
+  );
+  
+  // if true the solver will be stopped after a single iteration, writing to the disk
+  // three times: overwriting 0, mesh with moved surface, relaxed mesh.
+  dissolDebug = dissolProperties.lookupOrDefault<bool>("dissolDebug", false);
+  
+  // if true the concentration for the points at the edge between wall and inlet
+  // will be modified
+  fixInletWallEdgeDispl = readBool(dissolProperties.lookup("fixInletWallEdgeDispl"));
+  // a tolerance for the relaxation cycles
+  rlxTol = dissolProperties.lookupOrDefault<scalar>("relaxationTolerance", 0.1);
+  
+  // if true the grading in Z direction will change with time in accordance to the
+  // formula G = inigradingZ/(timeCoef*t+1)
+  variableGrading = dissolProperties.lookupOrDefault<bool>("varG", false);
+  inigradingZ = dissolProperties.lookupOrDefault<scalar>("inigradingZ", 1.0);
+  timeCoefZ = dissolProperties.lookupOrDefault<scalar>("timeCoefZ", 1.0);
+  Nz = dissolProperties.lookupOrDefault<int>("numberOfCellsZ", 10);
+  
   if( !variableGrading ){
-    wallWeights = mesh_rlx->calc_weights2( mesh.boundaryMesh()[wallID]);
+    wallWeights = calc_weights2( mesh.boundaryMesh()[wallID]);
+  }
+  
+  Info << "dissolFoamDict, dissolDebug:  " << dissolDebug <<nl;
+  Info << "dissolFoamDict, fixInletConcentration:  " << fixInletWallEdgeDispl <<nl;
+  Info << "dissolFoamDict, rlxTol:  " << rlxTol <<nl;
+  Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
+  Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
+  Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;
+  
+  inletWeights  = calc_edge_weights( mesh.boundaryMesh()[inletID] );
+  outletWeights = calc_edge_weights( mesh.boundaryMesh()[outletID]);
+}
+
+void DissolMeshRlx::meshUpdate(vectorField& pointDispWall, Time& time){
+  pointVectorField& pointVelocity = const_cast<pointVectorField&>(
+    mesh_.objectRegistry::lookupObject<pointVectorField>( "pointMotionU" )
+  );
+
+  if(fixInletWallEdgeDispl){
+    Info << "Fix concentration on the edge between walls and inlet"<< nl;
+    fixIWEdgeDispl(pointDispWall);
+  }
+
+//  Mesh update 2: boundary mesh relaxation
+  if( variableGrading ){
+    Info<<nl<<"Calculating new Z grading...."<<nl;
+    scalar Gz = inigradingZ / (timeCoefZ * time.value() + 1.0);
+    scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
+    wallWeights = calc_weights( mesh_.boundaryMesh()[wallID], lambdaZ);
+  }
+
+  pointField savedPointsAll = mesh_.points();
+  vectorField pointDispInlet = calculateInletDisplacement(pointDispWall);
+  vectorField pointDispOutlet = calculateOutletDisplacement(pointDispWall);
+
+//  Mesh update 3: boundary mesh relaxation
+
+  pointField mpW = doWallDisplacement( pointDispWall * deltaT );
+  mesh_.movePoints( mpW);
+
+  pointField mpI = doInletDisplacement( pointDispInlet * deltaT );
+  mesh_.movePoints( mpI );
+
+  pointField mpO = doOutletDisplacement( pointDispOutlet * deltaT );
+  mesh_.movePoints( mpO );
+
+  if(dissolDebug){
+    time.write();
+    time++;
+  }
+
+// Relaxing edges. 1D
+  Info<<"Relaxing the inlet-wall edge..."<<nl;
+  vectorField wiEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[inletID], rlxTol, inletWeights);
+  pointField mpWIE = doWallDisplacement( wiEdgeRlx );
+  mesh_.movePoints( mpWIE );
+
+  Info<<"Relaxing the outlet-wall edge..."<<nl;
+  vectorField woEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[outletID], rlxTol, outletWeights);
+  pointField mpWOE = doWallDisplacement( woEdgeRlx );
+  mesh_.movePoints( mpWOE );
+
+// *********************************************************************************
+// Relaxing surfaces. 2D
+  Info<<"Relaxing the wall... time: "<< time.cpuTimeIncrement() <<nl;
+  vectorField wallRelax;
+  if( variableGrading ){
+    wallRelax = wallRelaxation( mesh_.boundaryMesh()[wallID], wallWeights, rlxTol);
+  }
+  else{
+    wallRelax = wallRelaxation2( mesh_.boundaryMesh()[wallID], wallWeights, rlxTol);
+  }
+  Info<<"Wall relaxation time: " << time.cpuTimeIncrement() << " s" << nl;
+
+  mesh_.movePoints( savedPointsAll );
+
+  vectorField vvff =  wallRelax 
+                    + wiEdgeRlx
+                    + woEdgeRlx
+                    + pointDispWall * deltaT;
+
+  Info<<"Relaxing inlet..."<<nl;
+  vectorField inlRelax = inletOutletRlx( mesh_.boundaryMesh()[inletID], rlxTol, vvff);
+  Info<<"Inlet relaxation time: " << time.cpuTimeIncrement() << " s" << nl;
+
+  Info<<"Relaxing outlet..."<<nl;
+  vectorField outRelax = inletOutletRlx( mesh_.boundaryMesh()[outletID], rlxTol, vvff);
+  Info<<"Outlet relaxation time: " << time.cpuTimeIncrement() << " s" << nl;
+
+  mesh_.movePoints( savedPointsAll );
+  // *********************************************************************************
+
+
+  // *********************************************************************************
+  // Final mesh update. 3D
+  wiEdgeRlx /= deltaT;
+  woEdgeRlx /= deltaT;
+  wallRelax /= deltaT;
+  pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall + wiEdgeRlx + woEdgeRlx;
+
+  inlRelax /= deltaT;
+  pointVelocity.boundaryField()[inletID] == inlRelax + pointDispInlet;
+
+  outRelax /= deltaT;
+  pointVelocity.boundaryField()[outletID] == outRelax + pointDispOutlet;
+
+  Info<<"Final mesh update"<<nl;
+
+  mesh_.update();
+  
+  // if it is Debug mode finalize the run here
+  if( dissolDebug ){
+    time.write();
+    time++;
+    std::exit(0);
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 vectorField DissolMeshRlx::normalsOnTheEdge(){
 
@@ -194,9 +351,6 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
     pointDispInlet[ local_inlet_WallsInletEdges[i] ].z() = 0;
   }
   // *************************************************************************************
-  
-  
-  
   vectorField displacement(N, vector::zero);
   
   //const pointField& boundaryPoints = mesh_.boundaryMesh()[inletID].localPoints();
@@ -208,18 +362,6 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
       displacement[i].z() = (maxZ - edgePoints[i].z());
     }
     vectorField proj_disp = transform(I - edgeNorms*edgeNorms, displacement);
-    //vectorField proj_disp = (displacement + transform(I - edgeNorms*edgeNorms*2.0, displacement))/2.0;
-    
-    /*
-    if( Pstream::master() ){
-      vector aa = displacement[0] - proj_disp[0];
-      Info<<displacement[0]<<"  "
-              <<proj_disp[0]<<"  "
-              <<edgeNorms[0]<<"  aa "
-              <<aa<<"  "
-              <<nl;
-    }
-    */
     
     scalarField aux_f = mag(proj_disp);
     scalarField aux_f0(N, 0.0);
@@ -251,16 +393,6 @@ vectorField DissolMeshRlx::calculateInletDisplacement(vectorField& wallDispl){
     label pointI = local_wall_WallsInletEdges[i];
     wallDispl[ pointI ] = edgePoints[i]-wallBP[pointI];
   }
-  
-  /*
-  forAll(local_wall_WallsInletEdges, i){
-    vector A = wallDispl[ local_wall_WallsInletEdges[i] ];
-    vector dz(0.0, 0.0, maxdZ - A.z());
-          
-    wallDispl[ local_wall_WallsInletEdges[i] ] += dz;
-  }
-  */
-
   return pointDispInlet;
 }
 
@@ -397,7 +529,7 @@ pointField DissolMeshRlx::doOutletDisplacement(const vectorField& outletDispl){
 }
 
 
-void DissolMeshRlx::fixEdgeConcentration( vectorField& concNorm ){
+void DissolMeshRlx::fixIWEdgeDispl( vectorField& concNorm ){
   const pointField& boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();
   
   forAll( inletTriple, i ){
@@ -432,7 +564,6 @@ scalar DissolMeshRlx::extrapolateConcentrationExpZ(const pointField& loc_points,
 
   return c2 * std::pow( c1/c2, r02/r12 );
 }
-
 scalar DissolMeshRlx::extrapolateConcentrationExp(const pointField& loc_points,
                                 scalar& c1, scalar& c2, 
                                 const labelList& pnts){
@@ -441,8 +572,6 @@ scalar DissolMeshRlx::extrapolateConcentrationExp(const pointField& loc_points,
 
   return c2 * std::pow( c1/c2, r02/r12 );
 }
-
-
 scalar DissolMeshRlx::extrapolateConcentrationLinear(const pointField& loc_points,
                                 scalar& c1, scalar& c2, 
                                 const labelList& pnt){
@@ -451,7 +580,6 @@ scalar DissolMeshRlx::extrapolateConcentrationLinear(const pointField& loc_point
 
   return c2 - (c2-c1) * r02/r12;
 }
-
 vector DissolMeshRlx::extrapolateVectorLinear(const pointField& loc_points,
                                 vector& r1, vector& r2, 
                                 const labelList& pnt){
@@ -460,8 +588,6 @@ vector DissolMeshRlx::extrapolateVectorLinear(const pointField& loc_points,
 
   return r2 - (r2-r1) * r02/r12;
 }
-
-
 scalar DissolMeshRlx::extrapolateConcentrationLinearZ(const pointField& loc_points,
                                 scalar& c1, scalar& c2, 
                                 const labelList& pnts){
