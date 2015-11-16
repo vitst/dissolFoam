@@ -86,9 +86,10 @@ private:
   labelListList inletTriple;
   
   // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  bool dissolDebug;
   bool fixInletWallEdgeDispl;
   scalar rlxTol;
-  bool dissolDebug;
+  scalar k_1, k_2; // relaxation acceleration factors
   
   bool variableGrading;
   scalar inigradingZ;
@@ -377,9 +378,7 @@ public:
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
-      //scalar factor = 1.0;
-      scalar factor = 5.5;
-      if(itt%2==0) factor = 1.17;
+      scalar factor = (itt%2==0) ? k_2 : k_1;
       vectorField finalDisplacement = factor * projectedDisplacement;
       
       boundaryPoints += finalDisplacement;
@@ -404,11 +403,9 @@ public:
       
       itt+=1;
       
-      
       //if(itt%40000==0){
       //  break;
       //}
-      
     }
     Info<< patch_.name() << "  converged in "<< itt 
             << " iterations. Tolerance: " << displ_tol<< nl;
@@ -462,9 +459,15 @@ public:
           scalar mag_d = mag(d);
           
           vector disp;
-          //disp.x() = d.x() * pw[j].x();
-          disp.x() = d.x() * 0.0;
-          disp.y() = d.y() * pw[j].y();
+          
+          //if(global_WallInletEdges.size()<5){
+            //disp.x() = d.x() * 0.0;
+            //disp.y() = d.y() * 0.0;
+          //}
+          //else{
+            disp.x() = d.x() * pw[j].x();
+            disp.y() = d.y() * pw[j].y();
+          //}
           //disp.x() = d.x() * 0.25;
           //disp.y() = d.y() * 0.25;
           disp.z() = d.z() * pw[j].z();
@@ -505,14 +508,13 @@ public:
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
-      scalar factor = 0.5;
-      //scalar factor = 5.5;
-      //if(itt%2==0) factor = 1.17;
+      scalar factor = (itt%2==0) ? k_2 : k_1;
+      
       vectorField finalDisplacement = factor * projectedDisplacement;
       
       boundaryPoints += finalDisplacement;
       
-      scalarField aux_f = mag(finalDisplacement)/tol;
+      scalarField aux_f = mag(finalDisplacement/factor)/tol;
       scalarField aux_f0(finalDisplacement.size(), 0.0);
       
       if( aux_f == aux_f0 ){
@@ -531,10 +533,6 @@ public:
       }
       
       itt+=1;
-      
-      //if(itt%40000==0){
-      //  break;
-      //}
     }
     Info<< patch_.name() << "  converged in "<< itt 
             << " iterations. Tolerance: " << displ_tol<< nl;
@@ -636,11 +634,6 @@ public:
       
       // normalization
       forAll(pointNorm, pointi){
-        /*
-        if(pointi==8265){
-          Info<<"AA "<< pointNorm[pointi] << "  " << faceToPointSumWeights[pointi] <<nl;
-        }
-        */
         pointNorm[pointi] /= faceToPointSumWeights[pointi];
         
         scalar pnd = mag(pointNorm[pointi]);
@@ -650,11 +643,7 @@ public:
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
-      //Info<< (projectedDisplacement - displacement) << nl;
-      
-      
       // fixing edges
-      //vector ny(0,1,0);
       vector nz(0,0,1);
 
       vectorField inletPrj( global_WallInletEdges.size() );
@@ -666,11 +655,8 @@ public:
           inletPrjN[i] = pointNorm[ ind ];
           inletPrjN[i].z() = 0.0;
           inletPrjN[i] /= mag(inletPrjN[i]);
-
-          //Info << ind << "   " << pointNorm[ind] << "   " << mag(pointNorm[ind]) <<nl;
         }
       }
-      //inletPrj = transform(I - ny*ny, inletPrj);
       inletPrj = transform(I - inletPrjN*inletPrjN, inletPrj);
       inletPrj = transform(I - nz*nz, inletPrj);
       forAll(global_WallInletEdges, i){

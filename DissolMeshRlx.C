@@ -70,6 +70,10 @@ DissolMeshRlx::DissolMeshRlx(dynamicFvMesh& mesh)
   timeCoefZ = dissolProperties.lookupOrDefault<scalar>("timeCoefZ", 1.0);
   Nz = dissolProperties.lookupOrDefault<int>("numberOfCellsZ", 10);
   
+  // relaxation acceleration factors
+  k_1 = dissolProperties.lookupOrDefault<scalar>("k_1", 1.0);
+  k_2 = dissolProperties.lookupOrDefault<scalar>("k_1", 1.0);
+  
   if( !variableGrading ){
     wallWeights = calc_weights2( mesh.boundaryMesh()[wallID]);
   }
@@ -89,12 +93,12 @@ void DissolMeshRlx::meshUpdate(vectorField& pointDispWall, Time& time){
   pointVectorField& pointVelocity = const_cast<pointVectorField&>(
     mesh_.objectRegistry::lookupObject<pointVectorField>( "pointMotionU" )
   );
-
+  
   if(fixInletWallEdgeDispl){
     Info << "Fix concentration on the edge between walls and inlet"<< nl;
     fixIWEdgeDispl(pointDispWall);
   }
-
+  
 //  Mesh update 2: boundary mesh relaxation
   if( variableGrading ){
     Info<<nl<<"Calculating new Z grading...."<<nl;
@@ -148,10 +152,10 @@ void DissolMeshRlx::meshUpdate(vectorField& pointDispWall, Time& time){
 
   mesh_.movePoints( savedPointsAll );
 
-  vectorField vvff =  wallRelax 
-                    + wiEdgeRlx
-                    + woEdgeRlx
-                    + pointDispWall * deltaT;
+  const vectorField vvff =  wallRelax 
+                          + wiEdgeRlx
+                          + woEdgeRlx
+                          + pointDispWall * deltaT;
 
   Info<<"Relaxing inlet..."<<nl;
   vectorField inlRelax = inletOutletRlx( mesh_.boundaryMesh()[inletID], rlxTol, vvff);
@@ -160,18 +164,16 @@ void DissolMeshRlx::meshUpdate(vectorField& pointDispWall, Time& time){
   Info<<"Relaxing outlet..."<<nl;
   vectorField outRelax = inletOutletRlx( mesh_.boundaryMesh()[outletID], rlxTol, vvff);
   Info<<"Outlet relaxation time: " << time.cpuTimeIncrement() << " s" << nl;
-
-  mesh_.movePoints( savedPointsAll );
-  // *********************************************************************************
-
-
+  
+  
+  //mesh_.movePoints( savedPointsAll );
   // *********************************************************************************
   // Final mesh update. 3D
   wiEdgeRlx /= deltaT;
   woEdgeRlx /= deltaT;
   wallRelax /= deltaT;
   pointVelocity.boundaryField()[wallID] == wallRelax + pointDispWall + wiEdgeRlx + woEdgeRlx;
-
+  
   inlRelax /= deltaT;
   pointVelocity.boundaryField()[inletID] == inlRelax + pointDispInlet;
 

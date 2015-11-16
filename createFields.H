@@ -70,6 +70,24 @@
     );
 
 
+    Info<< "Creating field gradC\n" << endl;
+    
+    IOobject::writeOption gradCwriteOpt = (gradCwrite) ? IOobject::AUTO_WRITE : IOobject::NO_WRITE;
+    
+    volScalarField maggradC
+    (
+        IOobject
+        (
+            "gradC",
+            runTime.timeName(),
+            mesh,
+            IOobject::NO_READ,
+            gradCwriteOpt
+        ),
+        mag(-fvc::grad(C))
+    );
+
+    
     # include "createPhi.H"
 
     label pRefCell = 0;

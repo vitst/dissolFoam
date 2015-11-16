@@ -8,6 +8,13 @@
 
 #include "coupledPatchInterpolation.H"
 
+#include "pointMesh.H"
+#include "pointPatchField.H"
+#include "volPointInterpolation.H"
+
+//#include "mapPolyMesh.H"
+
+
 FieldOperations::FieldOperations()
 {
 
@@ -74,19 +81,95 @@ scalar FieldOperations::calcDanckwerts(const fvMesh& mesh,
 vectorField FieldOperations::getWallPointMotion(const fvMesh& mesh,const volScalarField& C,
                                                scalar l_T, label wallID
 ){
+  
+  /*
+  volVectorField mggdC
+  (
+      IOobject
+      (
+          "mggdC",
+          mesh.time().timeName(),
+          mesh,
+          IOobject::NO_READ,
+          IOobject::NO_WRITE
+      ),
+      -fvc::grad(C)
+  );
+  pointVectorField grCp
+  (
+      IOobject
+      (
+          "grCp",
+          mesh.time().timeName(),
+          mesh,
+          IOobject::NO_READ,
+          IOobject::NO_WRITE
+      ),
+      pointMesh::New(mesh),
+      dimensionedVector
+      (
+          "grCp",
+          mggdC.dimensions(),
+          vector::zero
+      )
+  
+  );
+  
+  labelList wallsToAll = mesh.boundaryMesh()[wallID].meshPoints();
+  pointField wallsLoc = mesh.boundaryMesh()[wallID].localPoints();
+  vectorField sss(wallsLoc.size(), vector::zero);
+  
+  grCp == volPointInterpolation::New(mesh).interpolate
+  (
+      -fvc::grad(C)
+  );
+
+  forAll(sss, i){
+    label ind = wallsToAll[i];
+    sss[i] = grCp[ind];
+  }
+  // ------------------------------------------------------------------------
+  */
+  
+  
   // interpolate the concentration from cells to wall faces
   coupledPatchInterpolation patchInterpolator( mesh.boundaryMesh()[wallID], mesh );
 
   // concentration and normals on the faces
   scalarField pointCface = -C.boundaryField()[wallID].snGrad();
   vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
+  
+  // ----Print values at the faces-----------------------------------
+  /*
+  fileName current_dir;
+  current_dir = "faceDisplacement" / runTime.timeName();
+  if ( !isDir(current_dissolpostproc_dir) ) mkDir(current_dissolpostproc_dir);
+  fileName current_file_path;
+  current_file_path =  / "edges";
+  OFstream aFile( current_file_path );
+  */
 
+  
+  // ----------------------------------------------------------------
+  
   scalarField motionC = patchInterpolator.faceToPointInterpolate(pointCface);
   vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
+  
   // normalize point normals to 1
   forAll(motionN, ii) motionN[ii]/=mag(motionN[ii]);
   
+  /*
+  scalarField qqq = (sss & motionN);
+  
+  forAll(qqq, i){
+    Info<<qqq[i]<<"  "<<motionC[i]<<nl;
+  }
+  std::exit(0);
+  */
+  
+  
   return (l_T*motionC*motionN);
+  //return (l_T*qqq*motionN);
 }
 
 scalar FieldOperations::getInletArea(const fvMesh& mesh){

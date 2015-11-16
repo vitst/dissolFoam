@@ -97,7 +97,6 @@ int main(int argc, char *argv[])
   #include "setRootCase.H"
   #include "createTime.H"
   #include "createDynamicFvMesh.H"
-  #include "createFields.H"
 
   // OF simpleFoam  
   #include "createFvOptions.H" 
@@ -120,6 +119,12 @@ int main(int argc, char *argv[])
 
   // if true it switches on the convection term in Navier-Stokes eqn
   bool NStokesInertia(dissolProperties.lookupOrDefault<bool>("NStokesInertia", false));
+
+  bool gradCwrite(dissolProperties.lookupOrDefault<bool>("gradCwrite", false));
+
+  
+  #include "createFields.H"
+
   
   // l_T=D/(k*h_0)
   scalar l_T( dissolProperties.lookupOrDefault<scalar>("lT", 1.0) );
@@ -151,8 +156,7 @@ int main(int argc, char *argv[])
    * the convection-diffusion solvers if current time is not 0.
    * At the end of each cycle it is set to true.
    */
-  bool run0timestep = false;
-  if( runTime.value() == 0 ){  run0timestep = true; }
+  bool run0timestep = (runTime.value()==0) ? true : false;
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
   // MAIN TIME LOOP //
@@ -168,12 +172,15 @@ int main(int argc, char *argv[])
 // *    Stokes flow
 // *********************************************************
       steadyStateControl simple(mesh);
-      while ( simple.loop() ){
-        if(NStokesInertia){
+      while ( simple.loop() )
+      {
+        if(NStokesInertia)
+        {
           #include "UEqnNavierStokesConv.H"
           #include "pEqn.H"
         }
-        else{
+        else
+        {
           #include "UEqnStokes.H"
           #include "pEqn.H"
         }
@@ -190,7 +197,8 @@ int main(int argc, char *argv[])
 // *********************************************************
       Info << "Steady-state convection-diffusion"<< endl;
       int inlet_count = 0;
-      while ( true ){
+      while ( true )
+      {
         #include "ConvectionDiffusion.H"
         scalar tttol = fieldO->calcDanckwerts(mesh, U, C, inletID, D.value());
         inlet_count+=1;
@@ -198,36 +206,36 @@ int main(int argc, char *argv[])
         if(tttol<convCritCD) break;
       }
       
+      if(gradCwrite) maggradC == mag(-fvc::grad(C));
+      
 // *********************************************************
 // *    Write Output data
 // *********************************************************
       (runTime.value()==0) ? runTime.writeNow() : runTime.write();
-      Info<< "Write data, after conv-diff" << nl << nl;
+      Info<<"Write data, after conv-diff"<<nl<<nl;
     }
-    else{
-      Info<< "dissolFoam: Skip the Stokes and the convection-diffusion solvers."<<nl<<nl;
+    else
+    {
+      Info<<"dissolFoam: Skip the Stokes and the convection-diffusion solvers."<<nl<<nl;
     }
     runTime++;
     
 // *********************************************************
 // *    Mesh motion & relaxation
 // *********************************************************
-    
     // calculate mesh motion
     vectorField pointDispWall = fieldO->getWallPointMotion(mesh, C, l_T, wallID);
     // move and relax the mesh (@TODO separate surface motion and relaxation)
     mesh_rlx->meshUpdate(pointDispWall, runTime);
     
-    // *********************************************************************************
-
     Info<<"Mesh update: ExecutionTime = "<<runTime.elapsedCpuTime()<<" s"
-        << "  ClockTime = " << runTime.elapsedClockTime()<<" s"<<nl<<nl;
+        <<"  ClockTime = " << runTime.elapsedClockTime()<<" s"<<nl<<nl;
     
     run0timestep = true;
-    Info<< "Process: Time = " << runTime.timeName() << nl << nl;
+    Info<<"Process: Time = " << runTime.timeName() << nl << nl;
   }
 
-  Info << "End" << nl;
+  Info<<"End"<<nl;
   return 0;
 }
 
