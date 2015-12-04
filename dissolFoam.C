@@ -132,10 +132,14 @@ int main(int argc, char *argv[])
   // Reynolds number
   scalar Re( dissolProperties.lookupOrDefault<scalar>("Re", 1.0/nu.value()) );
   
+  bool constFlux( dissolProperties.lookupOrDefault<bool>("constFlux", false) );
+  
   Info << "*****************************************************************"<<nl;
   Info << "dissolFoamDict, NStokesInertia:  " << NStokesInertia <<nl;
   Info << "dissolFoamDict, Re:  " << Re <<nl;
+  Info << "dissolFoamDict, constFlux:  " << constFlux <<nl;
   Info << "*****************************************************************"<<nl;
+
   
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
@@ -189,8 +193,10 @@ int main(int argc, char *argv[])
 // *********************************************************
 // *    Keeping flow rate constant
 // *********************************************************
-      scalar nU = fieldO->getConstFlowRateFactor(mesh, U, areaCoef0);
-      U==U/nU;
+      if(constFlux){
+        scalar nU = fieldO->getConstFlowRateFactor(mesh, U, areaCoef0);
+        U==U/nU;
+      }
       
 // *********************************************************
 // *    Danckwerts boundary condition loop, Convenction-Diffusion

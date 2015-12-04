@@ -67,6 +67,12 @@ private:
 
   // vetex ID maps: patch to global
   labelList wallsToAll, inletToAll, outletToAll;
+  
+  // if cyclic is present
+  label cycID1, cycID2;
+  labelList cycToAll1, cycToAll2;
+  labelList local_wall_WallsCycEdges1;
+  labelList local_wall_WallsCycEdges2;
 
   // list of local (local for the wall) IDs for walls- inlet and outlet edges
   labelList local_wall_WallsInletEdges;
@@ -324,7 +330,7 @@ public:
       // create a displacement field for points
       vectorField displacement(N, vector::zero);
       scalarField tol(N, 0.0);
-    
+      
       forAll(boundaryPoints, i){
         point& curP = boundaryPoints[i];
         const labelList& pFaces = plistFaces[i];
@@ -352,7 +358,7 @@ public:
           faceToPointSumWeights[i] += nw;
         }
       }
-
+      
       // synchronizing over the cyclic and processor boundaries
       syncTools::syncPointList(mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, meshPoints, tol, plusEqOp<scalar>(), 0.0);

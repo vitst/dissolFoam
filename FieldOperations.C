@@ -56,9 +56,10 @@ scalar FieldOperations::calcDanckwerts(const fvMesh& mesh,
     vector vdel = fcr[ii]-ccr[fcL];
     scalar del = mag(vdel.z());
 
-    scalar aa = D / ( mag(U[fcL].z()) * del);
+    scalar aa = ( mag(U[fcL].z()) * del) / D;
     
-    newC[ii] = (1.0+aa*C[fcL])/(1.0+aa);
+    //newC[ii] = (1.0+aa*C[fcL])/(1.0+aa);
+    newC[ii] = (aa+C[fcL])/(aa+1.0);
   }
   scalarField diff = newC - oldC;
 
@@ -71,7 +72,6 @@ scalar FieldOperations::calcDanckwerts(const fvMesh& mesh,
 
   scalar tttol = 0.0;
   if( tttn!=0.0 ) tttol = ttt/tttn;
-
 
         
   return tttol;

@@ -667,6 +667,15 @@ void DissolMeshRlx::setUpPairsConc(){
 }
 
 void DissolMeshRlx::setUpLists(){
+  // if cyclic boundary exists
+  cycID1 = mesh_.boundaryMesh().findPatchID("periodicx1");
+  cycID2 = mesh_.boundaryMesh().findPatchID("periodicx2");
+
+  if(cycID1!=-1 && cycID2!=-1){
+    // map vetex ID: patch to global
+    cycToAll1  = mesh_.boundaryMesh()[cycID1].meshPoints();
+    cycToAll2  = mesh_.boundaryMesh()[cycID2].meshPoints();
+  }
 
   forAll(wallsToAll, i){
     label lW = wallsToAll[i];
@@ -683,7 +692,18 @@ void DissolMeshRlx::setUpLists(){
       local_wall_WallsOutletEdges.append( i );
       global_WallOutletEdges.append( lW );
     }
+    
+    if(cycID1!=-1 && cycID2!=-1){
+      if( findIndex(cycToAll1, lW) != -1){
+        local_wall_WallsCycEdges1.append( i );
+      }
+      if( findIndex(cycToAll2, lW) != -1){
+        local_wall_WallsCycEdges2.append( i );
+      }
+    }
   }
+  
+  
 }
 
 float DissolMeshRlx::get_version(){
