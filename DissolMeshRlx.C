@@ -676,7 +676,7 @@ void DissolMeshRlx::setUpLists(){
     cycToAll1  = mesh_.boundaryMesh()[cycID1].meshPoints();
     cycToAll2  = mesh_.boundaryMesh()[cycID2].meshPoints();
   }
-
+  
   forAll(wallsToAll, i){
     label lW = wallsToAll[i];
     
@@ -702,7 +702,6 @@ void DissolMeshRlx::setUpLists(){
       }
     }
   }
-  
   
 }
 

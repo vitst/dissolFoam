@@ -72,7 +72,6 @@ scalar FieldOperations::calcDanckwerts(const fvMesh& mesh,
 
   scalar tttol = 0.0;
   if( tttn!=0.0 ) tttol = ttt/tttn;
-
         
   return tttol;
 }

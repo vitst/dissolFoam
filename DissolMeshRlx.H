@@ -183,9 +183,10 @@ public:
     reduce(globalNN, sumOp<label>());
     
     //Info<<"number of points: "<<globalNN<<nl;
-    if(globalNN<5){
-      return globalDisplacement;
-    }
+    // @TODO check 2D <-> 3D
+    //if(globalNN<5){
+    //  return globalDisplacement;
+    //}
     
     labelListList nepe;
     forAll(local_wall_WallEdges, i){
@@ -211,6 +212,8 @@ public:
     
     double displ_tol = 1.0;
     int itt = 0;
+    vector nCyc(1.0,0.0,0.0);
+    
     while(displ_tol>rlxTol){
       pointField faceCs = faceCentres(boundaryPoints, llf);
       vectorField faceNs = faceNormals(boundaryPoints, llf);
@@ -244,6 +247,16 @@ public:
           sumWeights[i] += 1;
           //sumWeights[i] += nw;
         }
+
+        
+        // stick to cyclic boundary
+        if( findIndex(local_wall_WallsCycEdges1, curI) != -1 ||
+                findIndex(local_wall_WallsCycEdges2, curI) != -1){
+          //vector pdc = displacement[i];
+          //displacement[i] = transform(I - nCyc*nCyc, pdc);
+          displacement[i].x() = 0.0;
+        }
+        
         
         const labelList& pFaces = plistFaces[curI];
         forAll(pFaces, j){
@@ -276,7 +289,7 @@ public:
       
       forAll(local_wall_WallEdges, i){
         label ind = local_wall_WallEdges[i];
-        //boundaryPoints[ind] += 0.25*projectedDisplacement[i];
+        
         boundaryPoints[ind] += projectedDisplacement[i];
       }
       
@@ -439,6 +452,8 @@ public:
     
     double displ_tol = 1.0;
     int itt = 0;
+    vector nCyc(1.0,0.0,0.0);
+    
     while(displ_tol>rlxTol){
       
       // calculate current face centers
@@ -450,7 +465,7 @@ public:
       // create a displacement field for points
       vectorField displacement(N, vector::zero);
       scalarField tol(N, 0.0);
-    
+      
       forAll(boundaryPoints, i){
         point& curP = boundaryPoints[i];
         const labelList& pFaces = plistFaces[i];
@@ -486,6 +501,16 @@ public:
           pointNorm[i] += nw * faceNs[ faceI ];
           faceToPointSumWeights[i] += nw;
         }
+        
+        // stick to cyclic boundary
+        if( findIndex(local_wall_WallsCycEdges1, i) != -1 ||
+                findIndex(local_wall_WallsCycEdges2, i) != -1){
+          //vector pdc = displacement[i];
+          //displacement[i] = transform(I - nCyc*nCyc, pdc);
+          //Info<<curP.x()<<nl;
+          displacement[i].x() = 0.0;
+        }
+        
       }
       
       // synchronizing over the cyclic and processor boundaries
@@ -513,6 +538,19 @@ public:
       }
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
+      
+      /*
+      forAll(cycToAll1, i){
+        label ind = cycToAll1[i];
+        vector pdc = projectedDisplacement[ind];
+        projectedDisplacement[ind] = transform(I - nCyc*nCyc, pdc);
+      }
+      forAll(cycToAll2, i){
+        label ind = cycToAll2[i];
+        vector pdc = projectedDisplacement[ind];
+        projectedDisplacement[ind] = transform(I - nCyc*nCyc, pdc);
+      }
+      */
       
       scalar factor = (itt%2==0) ? k_2 : k_1;
       
