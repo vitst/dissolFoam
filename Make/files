@@ -1,5 +1,5 @@
-FieldOperations.C
-DissolMeshRlx.C
+fieldOperations.C
+meshRelax.C
 dissolFoam.C
 
 EXE = $(FOAM_USER_APPBIN)/dissolFoam

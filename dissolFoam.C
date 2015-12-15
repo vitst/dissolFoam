@@ -47,8 +47,8 @@ Description
 
 // dissol prj
 #include "steadyStateControl.H"
-#include "DissolMeshRlx.H"
-#include "FieldOperations.H"
+#include "meshRelax.H"
+#include "fieldOperations.H"
 
 //// auxiliary includes
 // mesh search
@@ -147,9 +147,9 @@ int main(int argc, char *argv[])
   //label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
   Info<< "Setup mesh relaxation class" << endl;
-  DissolMeshRlx* mesh_rlx = new DissolMeshRlx(mesh); // pointer to the mesh relaxation object
+  meshRelax* mesh_rlx = new meshRelax(mesh); // pointer to the mesh relaxation object
   Info<< "Setup field operation class" << endl;
-  FieldOperations* fieldO = new FieldOperations(); // pointer to the mesh relaxation object
+  fieldOperations* fieldO = new fieldOperations(); // pointer to the mesh relaxation object
   
   // calculating initial area of the inlet in order to scale U later
   scalar areaCoef0 = fieldO->getInletArea(mesh);
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
       {
         if(NStokesInertia)
         {
-          #include "UEqnNavierStokesConv.H"
+          #include "UEqn.H"
           #include "pEqn.H"
         }
         else
@@ -205,7 +205,7 @@ int main(int argc, char *argv[])
       int inlet_count = 0;
       while ( true )
       {
-        #include "ConvectionDiffusion.H"
+        #include "convectionDiffusion.H"
         scalar tttol = fieldO->calcDanckwerts(mesh, U, C, inletID, D.value());
         inlet_count+=1;
         Info<<"Inlet C iter "<<inlet_count<<"  tolerance: "<<tttol<< nl;
