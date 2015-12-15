@@ -72,7 +72,7 @@ DissolMeshRlx::DissolMeshRlx(dynamicFvMesh& mesh)
   
   // relaxation acceleration factors
   k_1 = dissolProperties.lookupOrDefault<scalar>("k_1", 1.0);
-  k_2 = dissolProperties.lookupOrDefault<scalar>("k_1", 1.0);
+  k_2 = dissolProperties.lookupOrDefault<scalar>("k_2", 1.0);
   
   if( !variableGrading ){
     wallWeights = calc_weights2( mesh.boundaryMesh()[wallID]);
@@ -106,6 +106,11 @@ void DissolMeshRlx::meshUpdate(vectorField& pointDispWall, Time& time){
     scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
     wallWeights = calc_weights( mesh_.boundaryMesh()[wallID], lambdaZ);
   }
+  /*
+  else{
+    wallWeights = calc_weights2( mesh_.boundaryMesh()[wallID]);
+  }
+  */
 
   pointField savedPointsAll = mesh_.points();
   vectorField pointDispInlet = calculateInletDisplacement(pointDispWall);
