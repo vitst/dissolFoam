@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
   #include "createFvOptions.H" 
   
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-  // reading dissolFoam dictionary
+  // reading dissolFoam and transportProperties dictionary
   const word dissolDictName("dissolFoamDict");
 
   IOdictionary dissolProperties
@@ -116,23 +116,41 @@ int main(int argc, char *argv[])
       IOobject::NO_WRITE
     )
   );
+  
+  IOdictionary transportProperties
+  (
+      IOobject
+      (
+          "transportProperties",
+          runTime.constant(),
+          mesh,
+          IOobject::MUST_READ,
+          IOobject::NO_WRITE
+      )
+  );
 
   // if true it switches on the convection term in Navier-Stokes eqn
-  bool NStokesInertia(dissolProperties.lookupOrDefault<bool>("NStokesInertia", false));
+  // moved to transport properties
+  //bool NStokesInertia(dissolProperties.lookupOrDefault<bool>("NStokesInertia", false));
+  bool NStokesInertia(transportProperties.lookupOrDefault<bool>("NStokesInertia", false));
 
   bool gradCwrite(dissolProperties.lookupOrDefault<bool>("gradCwrite", false));
-
   
   #include "createFields.H"
-
   
   // l_T=D/(k*h_0)
-  scalar l_T( dissolProperties.lookupOrDefault<scalar>("lT", 1.0) );
+  // moved to transport properties
+  //scalar l_T( dissolProperties.lookupOrDefault<scalar>("lT", 1.0) );
+  scalar l_T( transportProperties.lookupOrDefault<scalar>("lT", 1.0) );
   
   // Reynolds number
-  scalar Re( dissolProperties.lookupOrDefault<scalar>("Re", 1.0/nu.value()) );
+  // moved to transport properties
+  //scalar Re( dissolProperties.lookupOrDefault<scalar>("Re", 1.0/nu.value()) );
+  scalar Re( transportProperties.lookupOrDefault<scalar>("Re", 1.0/nu.value()) );
   
-  bool constFlux( dissolProperties.lookupOrDefault<bool>("constFlux", false) );
+  // moved to transport properties
+  //bool constFlux( dissolProperties.lookupOrDefault<bool>("constFlux", false) );
+  bool constFlux( transportProperties.lookupOrDefault<bool>("constFlux", false) );
   
   Info << "*****************************************************************"<<nl;
   Info << "dissolFoamDict, NStokesInertia:  " << NStokesInertia <<nl;

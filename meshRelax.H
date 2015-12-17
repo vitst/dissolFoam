@@ -250,12 +250,12 @@ public:
 
         
         // stick to cyclic boundary
-        //if( findIndex(local_wall_WallsCycEdges1, curI) != -1 ||
-        //        findIndex(local_wall_WallsCycEdges2, curI) != -1){
+        if( findIndex(local_wall_WallsCycEdges1, curI) != -1 ||
+            findIndex(local_wall_WallsCycEdges2, curI) != -1){
           //vector pdc = displacement[i];
           //displacement[i] = transform(I - nCyc*nCyc, pdc);
-        //  displacement[i].x() = 0.0;
-        //}
+          displacement[i].x() = 0.0;
+        }
         
         
         const labelList& pFaces = plistFaces[curI];
@@ -286,6 +286,23 @@ public:
       }
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
+      
+      
+      forAll(local_wall_WallsCycEdges1, i){
+        label ind = local_wall_WallsCycEdges1[i];
+        label loc_ind = findIndex(local_wall_WallEdges, ind);
+        if( loc_ind != -1){
+          projectedDisplacement[loc_ind].x() = 0.0;
+        }
+      }
+      forAll(local_wall_WallsCycEdges2, i){
+        label ind = local_wall_WallsCycEdges2[i];
+        label loc_ind = findIndex(local_wall_WallEdges, ind);
+        if( loc_ind != -1){
+          projectedDisplacement[loc_ind].x() = 0.0;
+        }
+      }
+      
       
       forAll(local_wall_WallEdges, i){
         label ind = local_wall_WallEdges[i];
@@ -503,13 +520,13 @@ public:
         }
         
         // stick to cyclic boundary
-        //if( findIndex(local_wall_WallsCycEdges1, i) != -1 ||
-        //        findIndex(local_wall_WallsCycEdges2, i) != -1){
+        if( findIndex(local_wall_WallsCycEdges1, i) != -1 ||
+            findIndex(local_wall_WallsCycEdges2, i) != -1){
           //vector pdc = displacement[i];
           //displacement[i] = transform(I - nCyc*nCyc, pdc);
           //Info<<curP.x()<<nl;
-        //  displacement[i].x() = 0.0;
-        //}
+          displacement[i].x() = 0.0;
+        }
         
       }
       
@@ -538,6 +555,15 @@ public:
       }
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
+      
+      forAll(local_wall_WallsCycEdges1, i){
+        label ind = local_wall_WallsCycEdges1[i];
+        projectedDisplacement[ind].x() = 0.0;
+      }
+      forAll(local_wall_WallsCycEdges2, i){
+        label ind = local_wall_WallsCycEdges2[i];
+        projectedDisplacement[ind].x() = 0.0;
+      }
       
       /*
       forAll(cycToAll1, i){

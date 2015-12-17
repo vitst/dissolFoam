@@ -84,6 +84,7 @@ meshRelax::meshRelax(dynamicFvMesh& mesh)
   Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
   Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
   Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;
+  Info << "*****************************************************************"<<nl<<nl;
   
   inletWeights  = calc_edge_weights( mesh.boundaryMesh()[inletID] );
   outletWeights = calc_edge_weights( mesh.boundaryMesh()[outletID]);
