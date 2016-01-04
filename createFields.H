@@ -1,4 +1,4 @@
-    Info<< "Reading transportProperties\n" << endl;
+    Info<< "Reading transportProperties\n" << nl;
 
     dimensionedScalar nu
     (

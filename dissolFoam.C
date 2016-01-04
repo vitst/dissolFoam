@@ -220,15 +220,16 @@ int main(int argc, char *argv[])
 // *    Danckwerts boundary condition loop, Convenction-Diffusion
 // *********************************************************
       Info << "Steady-state convection-diffusion"<< endl;
-      int inlet_count = 0;
-      while ( true )
-      {
+      //int inlet_count = 0;
+      //while ( true )
+      //while(inlet_count<3)
+      //{
         #include "convectionDiffusion.H"
-        scalar tttol = fieldO->calcDanckwerts(mesh, U, C, inletID, D.value());
-        inlet_count+=1;
-        Info<<"Inlet C iter "<<inlet_count<<"  tolerance: "<<tttol<< nl;
-        if(tttol<convCritCD) break;
-      }
+      //  scalar tttol = fieldO->calcDanckwerts(mesh, U, C, inletID, D.value());
+      //  inlet_count+=1;
+      //  Info<<"Inlet C iter "<<inlet_count<<"  tolerance: "<<tttol<< nl;
+      //  if(tttol<convCritCD) break;
+      //}
       
       if(gradCwrite) maggradC == mag(-fvc::grad(C));
       

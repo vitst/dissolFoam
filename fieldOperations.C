@@ -66,9 +66,9 @@ scalar fieldOperations::calcDanckwerts(const fvMesh& mesh,
   C.boundaryField()[inletID]==newC;
   
   scalar ttt  = mag( gSum( diff ) );
-  reduce(ttt, sumOp<scalar>());
+  //reduce(ttt, sumOp<scalar>());
   scalar tttn = mag( gSum( newC ) );
-  reduce(tttn, sumOp<scalar>());
+  //reduce(tttn, sumOp<scalar>());
 
   scalar tttol = 0.0;
   if( tttn!=0.0 ) tttol = ttt/tttn;
