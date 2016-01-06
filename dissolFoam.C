@@ -161,7 +161,7 @@ int main(int argc, char *argv[])
   
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
-  label inletID = mesh.boundaryMesh().findPatchID("inlet");
+  //label inletID = mesh.boundaryMesh().findPatchID("inlet");
   //label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
   Info<< "Setup mesh relaxation class" << endl;
@@ -169,8 +169,9 @@ int main(int argc, char *argv[])
   Info<< "Setup field operation class" << endl;
   fieldOperations* fieldO = new fieldOperations(); // pointer to the mesh relaxation object
   
+  
   // calculating initial area of the inlet in order to scale U later
-  scalar areaCoef0 = fieldO->getInletArea(mesh);
+  scalar areaCoef0 = fieldO->getInletArea(args);
   
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   /*

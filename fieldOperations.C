@@ -171,10 +171,26 @@ vectorField fieldOperations::getWallPointMotion(const fvMesh& mesh,const volScal
   //return (l_T*qqq*motionN);
 }
 
-scalar fieldOperations::getInletArea(const fvMesh& mesh){
+scalar fieldOperations::getInletArea(const argList& args){
+  //Foam::Time tempRunTime(rt);
+  Foam::Time timeTmp(Foam::Time::controlDictName, args);
+  Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args);
+  timeTmp.setTime(timeDirs[0], 0);
+  
+  Foam::fvMesh meshTmp
+  (
+      Foam::IOobject
+      (
+          Foam::fvMesh::defaultRegion,
+          timeTmp.timeName(),
+          timeTmp,
+          Foam::IOobject::MUST_READ
+      )
+  );
+  
   scalar areaCoef = 0.0;
-  const surfaceScalarField& magSf2 = mesh.magSf();
-  label inletID = mesh.boundaryMesh().findPatchID("inlet");
+  const surfaceScalarField& magSf2 = meshTmp.magSf();
+  label inletID = meshTmp.boundaryMesh().findPatchID("inlet");
   forAll(magSf2.boundaryField()[inletID], facei){
     areaCoef += magSf2.boundaryField()[inletID][facei];
   }
