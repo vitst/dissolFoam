@@ -131,25 +131,20 @@ int main(int argc, char *argv[])
 
   // if true it switches on the convection term in Navier-Stokes eqn
   // moved to transport properties
-  //bool NStokesInertia(dissolProperties.lookupOrDefault<bool>("NStokesInertia", false));
   bool NStokesInertia(transportProperties.lookupOrDefault<bool>("NStokesInertia", false));
-
   bool gradCwrite(dissolProperties.lookupOrDefault<bool>("gradCwrite", false));
   
   #include "createFields.H"
   
   // l_T=D/(k*h_0)
   // moved to transport properties
-  //scalar l_T( dissolProperties.lookupOrDefault<scalar>("lT", 1.0) );
   scalar l_T( transportProperties.lookupOrDefault<scalar>("lT", 1.0) );
   
   // Reynolds number
   // moved to transport properties
-  //scalar Re( dissolProperties.lookupOrDefault<scalar>("Re", 1.0/nu.value()) );
   scalar Re( transportProperties.lookupOrDefault<scalar>("Re", 1.0/nu.value()) );
   
   // moved to transport properties
-  //bool constFlux( dissolProperties.lookupOrDefault<bool>("constFlux", false) );
   bool constFlux( transportProperties.lookupOrDefault<bool>("constFlux", false) );
   
   Info << "*****************************************************************"<<nl;
@@ -158,7 +153,6 @@ int main(int argc, char *argv[])
   Info << "dissolFoamDict, constFlux:  " << constFlux <<nl;
   Info << "*****************************************************************"<<nl;
 
-  
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
   //label inletID = mesh.boundaryMesh().findPatchID("inlet");
@@ -168,7 +162,6 @@ int main(int argc, char *argv[])
   meshRelax* mesh_rlx = new meshRelax(mesh); // pointer to the mesh relaxation object
   Info<< "Setup field operation class" << endl;
   fieldOperations* fieldO = new fieldOperations(); // pointer to the mesh relaxation object
-  
   
   // calculating initial area of the inlet in order to scale U later
   scalar areaCoef0 = fieldO->getInletArea(args);
