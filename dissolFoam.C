@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
   
   // l_T=D/(k*h_0)
   // moved to transport properties
-  scalar l_T( transportProperties.lookupOrDefault<scalar>("lT", 1.0) );
+  scalar l_T( transportProperties.lookupOrDefault<scalar>("l_T", 1.0) );
   
   // Reynolds number
   // moved to transport properties
