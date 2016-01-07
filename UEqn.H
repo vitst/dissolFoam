@@ -2,7 +2,7 @@
 
     tmp<fvVectorMatrix> UEqn
     (
-        Re/12.0 * fvm::div(phi, U)
+        Re * fvm::div(phi, U)
       - fvm::laplacian(nu, U)
       //+ turbulence->divDevReff(U)
       ==

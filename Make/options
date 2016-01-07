@@ -9,8 +9,7 @@ EXE_INC = \
     -I$(LIB_SRC)/fvOptions/lnInclude \
     -I$(LIB_SRC)/sampling/lnInclude \
     -I$(LIB_SRC)/dynamicFvMesh/lnInclude \
-    -I$(WM_PROJECT_USER_DIR)/applications/libs/steadyStateControl/lnInclude \
-    -I$(WM_PROJECT_USER_DIR)/applications/libs/coupledPatchInterpolation
+    -I$(WM_PROJECT_USER_DIR)/lnInclude
 
 EXE_LIBS = \
     -lincompressibleTurbulenceModel \
