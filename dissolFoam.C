@@ -129,15 +129,6 @@ int main(int argc, char *argv[])
       )
   );
 
-  // if true it switches on the convection term in Navier-Stokes eqn
-  // moved to transport properties
-  bool NStokesInertia;
-  if( !transportProperties.readIfPresent<bool>("NStokesInertia", NStokesInertia) ){
-    SeriousErrorIn("main")
-            <<"There is no NStokesInertia parameter in transportProperties dictionary"
-            <<exit(FatalError);
-  }
-  
   bool gradCwrite(dissolProperties.lookupOrDefault<bool>("gradCwrite", false));
   
   #include "createFields.H"
@@ -161,16 +152,16 @@ int main(int argc, char *argv[])
   }
   
   // moved to transport properties
-  bool constFlux( transportProperties.lookupOrDefault<bool>("constFlux", false) );
-  if( !transportProperties.readIfPresent<bool>("constFlux", constFlux) ){
+  bool constFlux;
+  if( !dissolProperties.readIfPresent<bool>("constFlux", constFlux) ){
     SeriousErrorIn("main")
             <<"There is no constFlux parameter in transportProperties dictionary"
             <<exit(FatalError);
   }
   
   Info << "*****************************************************************"<<nl;
-  Info << "dissolFoamDict, NStokesInertia:  " << NStokesInertia <<nl;
-  Info << "dissolFoamDict, Re:  " << Re <<nl;
+  Info << "transportProperties, Re:  " << Re <<nl;
+  Info << "transportProperties, l_T:  " << l_T <<nl;
   Info << "dissolFoamDict, constFlux:  " << constFlux <<nl;
   Info << "*****************************************************************"<<nl;
   
@@ -213,16 +204,8 @@ int main(int argc, char *argv[])
       steadyStateControl simple(mesh);
       while ( simple.loop() )
       {
-        if(NStokesInertia)
-        {
-          #include "UEqn.H"
-          #include "pEqn.H"
-        }
-        else
-        {
-          #include "UEqnStokes.H"
-          #include "pEqn.H"
-        }
+        #include "UEqn.H"
+        #include "pEqn.H"
       }
       
 // *********************************************************

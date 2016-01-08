@@ -85,9 +85,12 @@ meshRelax::meshRelax(dynamicFvMesh& mesh)
   Info << "dissolFoamDict, dissolDebug:  " << dissolDebug <<nl;
   Info << "dissolFoamDict, fixInletConcentration:  " << fixInletWallEdgeDispl <<nl;
   Info << "dissolFoamDict, rlxTol:  " << rlxTol <<nl;
-  Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
-  Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
-  Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;
+  
+  if( !variableGrading ){
+    Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
+    Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
+    Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;
+  }
   Info << "*****************************************************************"<<nl<<nl;
   
   inletWeights  = calc_edge_weights( mesh.boundaryMesh()[inletID] );
