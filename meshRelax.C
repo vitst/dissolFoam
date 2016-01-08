@@ -61,7 +61,11 @@ meshRelax::meshRelax(dynamicFvMesh& mesh)
   // will be modified
   fixInletWallEdgeDispl = readBool(dissolProperties.lookup("fixInletWallEdgeDispl"));
   // a tolerance for the relaxation cycles
-  rlxTol = dissolProperties.lookupOrDefault<scalar>("relaxationTolerance", 0.1);
+  if( !dissolProperties.readIfPresent<scalar>("relaxationTolerance", rlxTol) ){
+    SeriousErrorIn("meshRelax::meshRelax(dynamicFvMesh& mesh)")
+            <<"There is no relaxationTolerance parameter in dissolProperties dictionary"
+            <<exit(FatalError);
+  }
   
   // if true the grading in Z direction will change with time in accordance to the
   // formula G = inigradingZ/(timeCoef*t+1)

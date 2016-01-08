@@ -131,27 +131,50 @@ int main(int argc, char *argv[])
 
   // if true it switches on the convection term in Navier-Stokes eqn
   // moved to transport properties
-  bool NStokesInertia(transportProperties.lookupOrDefault<bool>("NStokesInertia", false));
+  bool NStokesInertia;
+  if( !transportProperties.readIfPresent<bool>("NStokesInertia", NStokesInertia) ){
+    SeriousErrorIn("main")
+            <<"There is no NStokesInertia parameter in transportProperties dictionary"
+            <<exit(FatalError);
+  }
+  
   bool gradCwrite(dissolProperties.lookupOrDefault<bool>("gradCwrite", false));
   
   #include "createFields.H"
   
   // l_T=D/(k*h_0)
   // moved to transport properties
-  scalar l_T( transportProperties.lookupOrDefault<scalar>("l_T", 1.0) );
+  scalar l_T;
+  if( !transportProperties.readIfPresent<scalar>("l_T", l_T) ){
+    SeriousErrorIn("main")
+            <<"There is no l_T parameter in transportProperties dictionary"
+            <<exit(FatalError);
+  }
   
   // Reynolds number
   // moved to transport properties
-  scalar Re( transportProperties.lookupOrDefault<scalar>("Re", 1.0/nu.value()) );
+  scalar Re;
+  if( !transportProperties.readIfPresent<scalar>("Re", Re) ){
+    SeriousErrorIn("main")
+            <<"There is no Re parameter in transportProperties dictionary"
+            <<exit(FatalError);
+  }
   
   // moved to transport properties
   bool constFlux( transportProperties.lookupOrDefault<bool>("constFlux", false) );
+  if( !transportProperties.readIfPresent<bool>("constFlux", constFlux) ){
+    SeriousErrorIn("main")
+            <<"There is no constFlux parameter in transportProperties dictionary"
+            <<exit(FatalError);
+  }
   
   Info << "*****************************************************************"<<nl;
   Info << "dissolFoamDict, NStokesInertia:  " << NStokesInertia <<nl;
   Info << "dissolFoamDict, Re:  " << Re <<nl;
   Info << "dissolFoamDict, constFlux:  " << constFlux <<nl;
   Info << "*****************************************************************"<<nl;
+  
+  //SeriousErrorIn("Main")<<"____________________________"<<exit(FatalError);
 
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
