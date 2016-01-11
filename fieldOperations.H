@@ -66,7 +66,7 @@ public:
   
   vectorField getWallPointMotion(const fvMesh&, const volScalarField&, scalar, label);
   
-  scalar getInletArea(const argList&);
+  scalar getInletArea(const argList&, bool);
 };
 
 

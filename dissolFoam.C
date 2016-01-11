@@ -134,7 +134,6 @@ int main(int argc, char *argv[])
   #include "createFields.H"
   
   // l_T=D/(k*h_0)
-  // moved to transport properties
   scalar l_T;
   if( !transportProperties.readIfPresent<scalar>("l_T", l_T) ){
     SeriousErrorIn("main")
@@ -142,31 +141,26 @@ int main(int argc, char *argv[])
             <<exit(FatalError);
   }
   
-  // Reynolds number
-  // moved to transport properties
-  scalar Re;
-  if( !transportProperties.readIfPresent<scalar>("Re", Re) ){
+  bool inertia;
+  if( !dissolProperties.readIfPresent<bool>("inertia", inertia) ){
     SeriousErrorIn("main")
-            <<"There is no Re parameter in transportProperties dictionary"
+            <<"There is no constFlux parameter in transportProperties dictionary"
             <<exit(FatalError);
   }
-  
-  // moved to transport properties
+
   bool constFlux;
   if( !dissolProperties.readIfPresent<bool>("constFlux", constFlux) ){
     SeriousErrorIn("main")
             <<"There is no constFlux parameter in transportProperties dictionary"
             <<exit(FatalError);
   }
-  
-  Info << "*****************************************************************"<<nl;
-  Info << "transportProperties, Re:  " << Re <<nl;
-  Info << "transportProperties, l_T:  " << l_T <<nl;
-  Info << "dissolFoamDict, constFlux:  " << constFlux <<nl;
-  Info << "*****************************************************************"<<nl;
-  
-  //SeriousErrorIn("Main")<<"____________________________"<<exit(FatalError);
 
+  Info << "*****************************************************************"<<nl;
+  Info << "transportProperties, l_T:  " << l_T <<nl;
+  Info << "dissolFoamDict, inertia:   " << inertia <<nl;
+  Info << "dissolFoamDict, constFlux: " << constFlux <<nl;
+  Info << "*****************************************************************"<<nl;
+  
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
   //label inletID = mesh.boundaryMesh().findPatchID("inlet");
@@ -178,85 +172,74 @@ int main(int argc, char *argv[])
   fieldOperations* fieldO = new fieldOperations(); // pointer to the mesh relaxation object
   
   // calculating initial area of the inlet in order to scale U later
-  scalar areaCoef0 = fieldO->getInletArea(args);
+  scalar areaCoef = fieldO->getInletArea(args, constFlux);
   
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-  /*
-   * A variable run0timestep is used to skip the Navier-Stokes and 
-   * the convection-diffusion solvers if current time is not 0.
-   * At the end of each cycle it is set to true.
-   */
-  bool run0timestep = (runTime.value()==0) ? true : false;
+  bool runTimeIs0 = (runTime.value()==0) ? true : false;
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
   // MAIN TIME LOOP //
   while (runTime.run())
   {
-    Info<< "Begin cycle: Time = " << runTime.timeName() << nl << endl;
-    
-    // At every restart it skips the Stokes and the convection-diffusion solvers
-    // if timestep is not 0 because it was done within the last timestep.
-    if( run0timestep )
+    Info<< "Begin cycle: Time = " << runTime.timeName() 
+            << "    dt = " << runTime.deltaTValue()
+            << nl << endl;
+
+    if( !runTimeIs0 )
     {
+// *********************************************************
+// *    Mesh motion & relaxation
+// *********************************************************
+      // calculate mesh motion
+      vectorField pointDispWall = fieldO->getWallPointMotion(mesh, C, l_T, wallID);
+      // move and relax the mesh (@TODO separate surface motion and relaxation)
+      mesh_rlx->meshUpdate(pointDispWall, runTime);
+    }  
 // *********************************************************
 // *    Stokes flow
 // *********************************************************
-      steadyStateControl simple(mesh);
-      while ( simple.loop() )
-      {
+    steadyStateControl simple(mesh);
+    while ( simple.loop() )
+    {
+      if(inertia){
         #include "UEqn.H"
         #include "pEqn.H"
       }
+      else{
+        #include "UEqnStokes.H"
+        #include "pEqn.H"
+      }
+    }
       
 // *********************************************************
 // *    Keeping flow rate constant
 // *********************************************************
-      if(constFlux){
-        scalar nU = fieldO->getConstFlowRateFactor(mesh, U, areaCoef0);
-        U==U/nU;
-      }
+    if(constFlux){
+      areaCoef = fieldO->getInletArea(args, constFlux);
+    }
+    scalar nU = fieldO->getConstFlowRateFactor(mesh, U, areaCoef);
+    U   == U   / nU;
+    phi == phi / nU;
       
 // *********************************************************
 // *    Danckwerts boundary condition loop, Convenction-Diffusion
 // *********************************************************
-      Info << "Steady-state convection-diffusion"<< endl;
-      //int inlet_count = 0;
-      //while ( true )
-      //while(inlet_count<3)
-      //{
-        #include "convectionDiffusion.H"
-      //  scalar tttol = fieldO->calcDanckwerts(mesh, U, C, inletID, D.value());
-      //  inlet_count+=1;
-      //  Info<<"Inlet C iter "<<inlet_count<<"  tolerance: "<<tttol<< nl;
-      //  if(tttol<convCritCD) break;
-      //}
-      
-      if(gradCwrite) maggradC == mag(-fvc::grad(C));
+    Info << "Steady-state convection-diffusion"<< endl;
+    #include "convectionDiffusion.H"
+
+    if(gradCwrite) maggradC == mag(-fvc::grad(C));
       
 // *********************************************************
 // *    Write Output data
 // *********************************************************
-      (runTime.value()==0) ? runTime.writeNow() : runTime.write();
-      Info<<"Write data, after conv-diff"<<nl<<nl;
-    }
-    else
-    {
-      Info<<"dissolFoam: Skip the Stokes and the convection-diffusion solvers."<<nl<<nl;
-    }
+    Info<<"Write fields"<<nl<<nl;
+    (runTimeIs0) ? runTime.writeNow() : runTime.write();
     runTime++;
-    
-// *********************************************************
-// *    Mesh motion & relaxation
-// *********************************************************
-    // calculate mesh motion
-    vectorField pointDispWall = fieldO->getWallPointMotion(mesh, C, l_T, wallID);
-    // move and relax the mesh (@TODO separate surface motion and relaxation)
-    mesh_rlx->meshUpdate(pointDispWall, runTime);
+    runTimeIs0 = false;
     
     Info<<"Mesh update: ExecutionTime = "<<runTime.elapsedCpuTime()<<" s"
         <<"  ClockTime = " << runTime.elapsedClockTime()<<" s"<<nl<<nl;
     
-    run0timestep = true;
     Info<<"Process: Time = " << runTime.timeName() << nl << nl;
   }
 

@@ -86,7 +86,7 @@ meshRelax::meshRelax(dynamicFvMesh& mesh)
   Info << "dissolFoamDict, fixInletConcentration:  " << fixInletWallEdgeDispl <<nl;
   Info << "dissolFoamDict, rlxTol:  " << rlxTol <<nl;
   
-  if( !variableGrading ){
+  if( variableGrading ){
     Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
     Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
     Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;

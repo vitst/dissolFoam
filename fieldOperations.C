@@ -30,7 +30,7 @@ scalar fieldOperations::getConstFlowRateFactor(const fvMesh& mesh,
   scalar minZ = min( po.component(vector::Z) );
   reduce(minZ, minOp<scalar>());
 
-  scalar nU = magU / (maxZ-minZ) / areaCoef0;
+  scalar nU = magU / ((maxZ-minZ) * areaCoef0);
 
   return nU;
 }
@@ -95,10 +95,12 @@ vectorField fieldOperations::getWallPointMotion(const fvMesh& mesh,const volScal
   return (l_T*motionC*motionN);
 }
 
-scalar fieldOperations::getInletArea(const argList& args){
+scalar fieldOperations::getInletArea(const argList& args, bool constFlux){
   Foam::Time timeTmp(Foam::Time::controlDictName, args);
-  Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args);
-  timeTmp.setTime(timeDirs[0], 0);
+  if(!constFlux){
+    Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args);
+    timeTmp.setTime(timeDirs[0], 0);
+  }
   
   Foam::fvMesh meshTmp
   (
