@@ -13,8 +13,16 @@
   double convCritCD = 0;    // convergence criteria
   int maxNumIterCD = 0;     // maximum number of iterations
   // read values for convergence checks from the dictionary
-  conv_diff.readIfPresent("convergence", convCritCD);
-  conv_diff.readIfPresent("maxIter",     maxNumIterCD);
+  if( !conv_diff.readIfPresent<double>("convergence", convCritCD) ){
+    SeriousErrorIn("main")
+            <<"There is no convergence parameter in CONVECTION_DIFFUSION subdictionary"
+            <<exit(FatalError);
+  }
+  if( !conv_diff.readIfPresent<int>("maxIter",     maxNumIterCD) ){
+    SeriousErrorIn("main")
+            <<"There is no maxIter parameter in CONVECTION_DIFFUSION subdictionary"
+            <<exit(FatalError);
+  }
 
   // Steady-state convection-diffusion solver main loop
   int counter = 0;
@@ -27,22 +35,21 @@
     ).initialResidual();
 
     if( residual < convCritCD ){
-      Info <<"Convection-diffusion: ExecutionTime = " << runTime.elapsedCpuTime() << " s "
-           <<"ClockTime = "<<runTime.elapsedClockTime()<<" s"<<nl 
-           <<"Converged in "<<counter<<" steps" 
-           <<nl<<nl;
+      Info << "Convection-diffusion: "
+           << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
+           << "ClockTime = " << runTime.elapsedClockTime() << " s" <<nl 
+           << "Converged in " << counter << " steps" << nl << endl;
+
       if(counter >= maxNumIterCD){
-        Info<<" dissolFoam Runtime WARNING:"
-            <<" Steady-state convection-diffusion solver did not converge."
-            <<nl
-            <<"It reached maximum number of iterations"
-            <<"  counter: "<<counter
-            <<"  maxNumIterCD: " <<maxNumIterCD
-            <<nl;
+        Info << nl << "dissolFoam Runtime WARNING:"
+             << "Convection-diffusion solver did not converge." << nl
+             <<"Maximum number of iterations"
+             <<"  counter: "<< counter << endl;
       }
       break;
     }
     else{
-      Info<<nl<<" Step "<<counter<<" residual: "<<residual<<" > "<<convCritCD<<nl;
+      Info << " Step " << counter
+           << " residual: "<< residual << " > " << convCritCD << endl;
     }
   }

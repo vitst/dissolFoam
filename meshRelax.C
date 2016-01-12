@@ -82,16 +82,16 @@ meshRelax::meshRelax(dynamicFvMesh& mesh)
     wallWeights = calc_weights2( mesh.boundaryMesh()[wallID]);
   }
   
-  Info << "dissolFoamDict, dissolDebug:  " << dissolDebug <<nl;
-  Info << "dissolFoamDict, fixInletConcentration:  " << fixInletWallEdgeDispl <<nl;
-  Info << "dissolFoamDict, rlxTol:  " << rlxTol <<nl;
+  Info << "dissolFoamDict, dissolDebug:  " << dissolDebug << endl;
+  Info << "dissolFoamDict, fixInletConcentration:  " << fixInletWallEdgeDispl << endl;
+  Info << "dissolFoamDict, rlxTol:  " << rlxTol << endl;
   
   if( variableGrading ){
-    Info << "dissolFoamDict, inigradingZ:  " << inigradingZ <<nl;
-    Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ <<nl;
-    Info << "dissolFoamDict, numberOfCellsZ:  " << Nz <<nl;
+    Info << "dissolFoamDict, inigradingZ:  " << inigradingZ << endl;
+    Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ << endl;
+    Info << "dissolFoamDict, numberOfCellsZ:  " << Nz << endl;
   }
-  Info << "*****************************************************************"<<nl<<nl;
+  Info << "*****************************************************************" <<nl << endl;
   
   inletWeights  = calc_edge_weights( mesh.boundaryMesh()[inletID] );
   outletWeights = calc_edge_weights( mesh.boundaryMesh()[outletID]);
@@ -109,7 +109,7 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
   
 //  Mesh update 2: boundary mesh relaxation
   if( variableGrading ){
-    Info<<nl<<"Calculating new Z grading...."<<nl;
+    Info<<nl<<"Calculating new Z grading...."<< endl;
     scalar Gz = inigradingZ / (timeCoefZ * time.value() + 1.0);
     scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
     wallWeights = calc_weights( mesh_.boundaryMesh()[wallID], lambdaZ);
@@ -136,19 +136,19 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
   }
 
 // Relaxing edges. 1D
-  Info<<"Relaxing the inlet-wall edge..."<<nl;
+  Info<<"Relaxing the inlet-wall edge..."<< endl;
   vectorField wiEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[inletID], rlxTol, inletWeights);
   pointField mpWIE = doWallDisplacement( wiEdgeRlx );
   mesh_.movePoints( mpWIE );
 
-  Info<<"Relaxing the outlet-wall edge..."<<nl;
+  Info<<"Relaxing the outlet-wall edge..."<< endl;
   vectorField woEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[outletID], rlxTol, outletWeights);
   pointField mpWOE = doWallDisplacement( woEdgeRlx );
   mesh_.movePoints( mpWOE );
 
 // *********************************************************************************
 // Relaxing surfaces. 2D
-  Info<<"Relaxing the wall... time: "<< time.cpuTimeIncrement() <<nl;
+  Info<<"Relaxing the wall... time: "<< time.cpuTimeIncrement() << endl;
   vectorField wallRelax;
   if( variableGrading ){
     wallRelax = wallRelaxation( mesh_.boundaryMesh()[wallID], wallWeights, rlxTol);
@@ -156,7 +156,7 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
   else{
     wallRelax = wallRelaxation2( mesh_.boundaryMesh()[wallID], wallWeights, rlxTol);
   }
-  Info<<"Wall relaxation time: " << time.cpuTimeIncrement() << " s" << nl;
+  Info << "Wall relaxation time: " << time.cpuTimeIncrement() << " s" << endl;
 
   mesh_.movePoints( savedPointsAll );
 
@@ -165,13 +165,13 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
                           + woEdgeRlx
                           + pointDispWall * deltaT;
 
-  Info<<"Relaxing inlet..."<<nl;
+  Info << "Relaxing inlet..." << endl;
   vectorField inlRelax = inletOutletRlx( mesh_.boundaryMesh()[inletID], rlxTol, vvff);
-  Info<<"Inlet relaxation time: " << time.cpuTimeIncrement() << " s" << nl;
+  Info << "Inlet relaxation time: " << time.cpuTimeIncrement() << " s" << endl;
 
-  Info<<"Relaxing outlet..."<<nl;
+  Info << "Relaxing outlet..." << endl;
   vectorField outRelax = inletOutletRlx( mesh_.boundaryMesh()[outletID], rlxTol, vvff);
-  Info<<"Outlet relaxation time: " << time.cpuTimeIncrement() << " s" << nl;
+  Info << "Outlet relaxation time: " << time.cpuTimeIncrement() << " s" << endl;
   
   
   //mesh_.movePoints( savedPointsAll );
@@ -188,7 +188,7 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
   outRelax /= deltaT;
   pointVelocity.boundaryField()[outletID] == outRelax + pointDispOutlet;
 
-  Info<<"Final mesh update"<<nl;
+  Info << "Final mesh update" << nl << endl;
 
   mesh_.update();
   

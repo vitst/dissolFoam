@@ -325,7 +325,7 @@ public:
       displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
       
       if(itt%1000==0){
-        Info<<patch_.name()<<"  rlx iter "<<itt<<"  tolerance: "<<displ_tol<< nl;
+        Info<<patch_.name()<<"  rlx iter "<<itt<<"  tolerance: "<<displ_tol<< endl;
       }
       
       itt+=1;

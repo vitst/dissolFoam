@@ -102,64 +102,13 @@ int main(int argc, char *argv[])
   #include "createFvOptions.H" 
   
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-  // reading dissolFoam and transportProperties dictionary
-  const word dissolDictName("dissolFoamDict");
-
-  IOdictionary dissolProperties
-  (
-    IOobject
-    (
-      dissolDictName,
-      runTime.system(),
-      mesh,
-      IOobject::MUST_READ,
-      IOobject::NO_WRITE
-    )
-  );
-  
-  IOdictionary transportProperties
-  (
-      IOobject
-      (
-          "transportProperties",
-          runTime.constant(),
-          mesh,
-          IOobject::MUST_READ,
-          IOobject::NO_WRITE
-      )
-  );
-
-  bool gradCwrite(dissolProperties.lookupOrDefault<bool>("gradCwrite", false));
-  
   #include "createFields.H"
   
-  // l_T=D/(k*h_0)
-  scalar l_T;
-  if( !transportProperties.readIfPresent<scalar>("l_T", l_T) ){
-    SeriousErrorIn("main")
-            <<"There is no l_T parameter in transportProperties dictionary"
-            <<exit(FatalError);
-  }
-  
-  bool inertia;
-  if( !dissolProperties.readIfPresent<bool>("inertia", inertia) ){
-    SeriousErrorIn("main")
-            <<"There is no constFlux parameter in transportProperties dictionary"
-            <<exit(FatalError);
-  }
-
-  bool constFlux;
-  if( !dissolProperties.readIfPresent<bool>("constFlux", constFlux) ){
-    SeriousErrorIn("main")
-            <<"There is no constFlux parameter in transportProperties dictionary"
-            <<exit(FatalError);
-  }
-
   Info << "*****************************************************************"<<nl;
   Info << "transportProperties, l_T:  " << l_T <<nl;
   Info << "dissolFoamDict, inertia:   " << inertia <<nl;
   Info << "dissolFoamDict, constFlux: " << constFlux <<nl;
-  Info << "*****************************************************************"<<nl;
+  Info << "*****************************************************************"<<endl;
   
   // Get patch ID for boundaries we want to move ("walls" "inlet")
   label wallID  = mesh.boundaryMesh().findPatchID("walls");
@@ -181,12 +130,14 @@ int main(int argc, char *argv[])
   // MAIN TIME LOOP //
   while (runTime.run())
   {
-    Info<< "Begin cycle: Time = " << runTime.timeName() 
-            << "    dt = " << runTime.deltaTValue()
-            << nl << endl;
-
     if( !runTimeIs0 )
     {
+      runTime++;                         // Don't update at t=0
+      Info << "Begin cycle: Time = " << runTime.timeName() 
+           << "    dt = " << runTime.deltaTValue()
+           << nl << endl;
+
+
 // *********************************************************
 // *    Mesh motion & relaxation
 // *********************************************************
@@ -194,7 +145,12 @@ int main(int argc, char *argv[])
       vectorField pointDispWall = fieldO->getWallPointMotion(mesh, C, l_T, wallID);
       // move and relax the mesh (@TODO separate surface motion and relaxation)
       mesh_rlx->meshUpdate(pointDispWall, runTime);
-    }  
+    }
+    
+    Info << "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
+         << " s" << "  ClockTime = " << runTime.elapsedClockTime()
+         << " s"<< nl<< endl;
+
 // *********************************************************
 // *    Stokes flow
 // *********************************************************
@@ -211,6 +167,11 @@ int main(int argc, char *argv[])
       }
     }
       
+    Info << "Flow solver: "
+         << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
+         <<"ClockTime = "<< runTime.elapsedClockTime() << " s"
+         << nl << nl << endl;
+
 // *********************************************************
 // *    Keeping flow rate constant
 // *********************************************************
@@ -232,18 +193,12 @@ int main(int argc, char *argv[])
 // *********************************************************
 // *    Write Output data
 // *********************************************************
-    Info<<"Write fields"<<nl<<nl;
+    Info << "Write fields: Time = " << runTime.timeName() << nl <<endl;
     (runTimeIs0) ? runTime.writeNow() : runTime.write();
-    runTime++;
     runTimeIs0 = false;
-    
-    Info<<"Mesh update: ExecutionTime = "<<runTime.elapsedCpuTime()<<" s"
-        <<"  ClockTime = " << runTime.elapsedClockTime()<<" s"<<nl<<nl;
-    
-    Info<<"Process: Time = " << runTime.timeName() << nl << nl;
   }
 
-  Info<<"End"<<nl;
+  Info << "End" << endl;
   return 0;
 }
 
