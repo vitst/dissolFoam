@@ -33,7 +33,7 @@
     (
       fvm::div(phi, C) - fvm::laplacian(D, C) == fvOptions(C)
     ).initialResidual();
-
+    
     if( residual < convCritCD ){
       Info << "Convection-diffusion: "
            << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "

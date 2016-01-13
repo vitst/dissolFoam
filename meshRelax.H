@@ -129,7 +129,7 @@ private:
 public:
   
   // Constructors
-  meshRelax(dynamicFvMesh&);
+  meshRelax(dynamicFvMesh&, const argList&);
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   
@@ -1113,7 +1113,7 @@ public:
 
 
   template<class Patch>
-  vectorFieldList calc_weights2(const Patch& patch_){
+  vectorFieldList calc_weights2(const fvMesh& meshTmp, const Patch& patch_){
 
     const labelList& meshPoints = patch_.meshPoints();
 
@@ -1161,7 +1161,7 @@ public:
       sumWeights[i] = sumw;
     }
 
-    syncTools::syncPointList( mesh_, meshPoints, sumWeights, plusEqOp<vector>(), vector::zero);
+    syncTools::syncPointList( meshTmp, meshPoints, sumWeights, plusEqOp<vector>(), vector::zero);
     
     forAll(weights, i){
       vectorField& pw = weights[i];
@@ -1183,9 +1183,9 @@ public:
 
 
   template<class Patch>
-  vectorFieldList calc_edge_weights(const Patch& patchIO_){
+  vectorFieldList calc_edge_weights(const fvMesh& meshTmp, const Patch& patchIO_){
     
-    const Patch& patch_ = mesh_.boundaryMesh()[wallID];
+    const Patch& patch_ = meshTmp.boundaryMesh()[wallID];
 
     pointField boundaryPoints = patch_.localPoints();
     
@@ -1261,7 +1261,7 @@ public:
       sumWeights[i] = sumw;
     }
     
-    syncTools::syncPointList(mesh_, global_WallEdges, sumWeights, plusEqOp<vector>(), vector::zero);
+    syncTools::syncPointList(meshTmp, global_WallEdges, sumWeights, plusEqOp<vector>(), vector::zero);
     
     forAll(weights, i){
       vectorField& pw = weights[i];

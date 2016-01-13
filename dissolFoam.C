@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
   
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   #include "createFields.H"
-  
+
   Info << "*****************************************************************"<<nl;
   Info << "transportProperties, l_T:  " << l_T <<nl;
   Info << "dissolFoamDict, inertia:   " << inertia <<nl;
@@ -116,12 +116,12 @@ int main(int argc, char *argv[])
   //label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
   Info<< "Setup mesh relaxation class" << endl;
-  meshRelax* mesh_rlx = new meshRelax(mesh); // pointer to the mesh relaxation object
+  meshRelax* mesh_rlxPtr = new meshRelax(mesh, args);       // pointer to the mesh relaxation object
   Info<< "Setup field operation class" << endl;
-  fieldOperations* fieldO = new fieldOperations(); // pointer to the mesh relaxation object
+  fieldOperations* fieldOpPtr = new fieldOperations(); // pointer to the mesh relaxation object
   
   // calculating initial area of the inlet in order to scale U later
-  scalar areaCoef = fieldO->getInletArea(args, constFlux);
+  scalar areaCoef = fieldOpPtr->getInletArea(args, constFlux);
   
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   bool runTimeIs0 = (runTime.value()==0) ? true : false;
@@ -142,15 +142,22 @@ int main(int argc, char *argv[])
 // *    Mesh motion & relaxation
 // *********************************************************
       // calculate mesh motion
-      vectorField pointDispWall = fieldO->getWallPointMotion(mesh, C, l_T, wallID);
+      vectorField pointDispWall = fieldOpPtr->getWallPointMotion(mesh, C, l_T, wallID);
       // move and relax the mesh (@TODO separate surface motion and relaxation)
-      mesh_rlx->meshUpdate(pointDispWall, runTime);
+      
+      /*
+      for(int i=0;i<10;i++){
+        Info<<i<<"  "<<pointDispWall[i]<<nl;
+      }
+      */
+      
+      mesh_rlxPtr->meshUpdate(pointDispWall, runTime);
+      
+      Info << "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
+           << " s" << "  ClockTime = " << runTime.elapsedClockTime()
+           << " s"<< nl<< endl;
     }
     
-    Info << "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
-         << " s" << "  ClockTime = " << runTime.elapsedClockTime()
-         << " s"<< nl<< endl;
-
 // *********************************************************
 // *    Stokes flow
 // *********************************************************
@@ -176,9 +183,9 @@ int main(int argc, char *argv[])
 // *    Keeping flow rate constant
 // *********************************************************
     if(constFlux){
-      areaCoef = fieldO->getInletArea(args, constFlux);
+      areaCoef = fieldOpPtr->getInletArea(args, constFlux);
     }
-    scalar nU = fieldO->getConstFlowRateFactor(mesh, U, areaCoef);
+    scalar nU = fieldOpPtr->getConstFlowRateFactor(mesh, U, areaCoef);
     U   == U   / nU;
     phi == phi / nU;
       

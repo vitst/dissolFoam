@@ -84,13 +84,30 @@ vectorField fieldOperations::getWallPointMotion(const fvMesh& mesh,const volScal
   scalarField pointCface = -C.boundaryField()[wallID].snGrad();
   vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
   
+  /*
+  for(int i=0;i<10;i++){
+    Info<<i<<"  points  C  "<<pointCface[i]<<"   n  "<<pointNface[i]<<nl;
+  }
+  */
   // ----------------------------------------------------------------
   
   scalarField motionC = patchInterpolator.faceToPointInterpolate(pointCface);
   vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
   
+  /*
+  for(int i=0;i<10;i++){
+    Info<<i<<"  C  "<<motionC[i]<<"   n  "<<motionN[i]<<nl;
+  }
+  */
+  
   // normalize point normals to 1
   forAll(motionN, ii) motionN[ii]/=mag(motionN[ii]);
+  
+  /*
+  for(int i=0;i<10;i++){
+    Info<<"   norm  "<<motionN[i]<<nl;
+  }
+  */
   
   return (l_T*motionC*motionN);
 }

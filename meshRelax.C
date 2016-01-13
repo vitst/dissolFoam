@@ -18,7 +18,7 @@
 #include <algorithm>
 
 // mesh1 is the mesh at time 0
-meshRelax::meshRelax(dynamicFvMesh& mesh)
+meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
 :
   version(0.6),
   date("Oct 2015"),
@@ -78,8 +78,24 @@ meshRelax::meshRelax(dynamicFvMesh& mesh)
   k_1 = dissolProperties.lookupOrDefault<scalar>("k_1", 1.0);
   k_2 = dissolProperties.lookupOrDefault<scalar>("k_2", 1.0);
   
+  
+  Foam::Time timeTmp(Foam::Time::controlDictName, args);
+  Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args);
+  timeTmp.setTime(timeDirs[0], 0);
+  
+  Foam::fvMesh meshTmp
+  (
+      Foam::IOobject
+      (
+          Foam::fvMesh::defaultRegion,
+          timeTmp.timeName(),
+          timeTmp,
+          Foam::IOobject::MUST_READ
+      )
+  );
+  
   if( !variableGrading ){
-    wallWeights = calc_weights2( mesh.boundaryMesh()[wallID]);
+    wallWeights = calc_weights2( meshTmp, meshTmp.boundaryMesh()[wallID]);
   }
   
   Info << "dissolFoamDict, dissolDebug:  " << dissolDebug << endl;
@@ -93,8 +109,8 @@ meshRelax::meshRelax(dynamicFvMesh& mesh)
   }
   Info << "*****************************************************************" <<nl << endl;
   
-  inletWeights  = calc_edge_weights( mesh.boundaryMesh()[inletID] );
-  outletWeights = calc_edge_weights( mesh.boundaryMesh()[outletID]);
+  inletWeights  = calc_edge_weights( meshTmp, mesh.boundaryMesh()[inletID] );
+  outletWeights = calc_edge_weights( meshTmp, mesh.boundaryMesh()[outletID]);
 }
 
 void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
