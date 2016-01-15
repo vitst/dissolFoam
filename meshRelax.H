@@ -216,12 +216,12 @@ public:
     vector nCyc(1.0,0.0,0.0);
     scalarField aux_f0(NN, 0.0);
     
-    vectorField pointNorm( N, vector::zero );
-    scalarList faceToPointSumWeights( N, 0.0 );
+    vectorField pointNorm( NN, vector::zero );
+    scalarList faceToPointSumWeights( NN, 0.0 );
     while(displ_tol>rlxTol){
       if(itt%q_edge_norm_recalc==0){
-        pointNorm = *(new vectorField( N, vector::zero ));
-        faceToPointSumWeights = *(new scalarList( N, 0.0 ));
+        pointNorm = *(new vectorField( NN, vector::zero ));
+        faceToPointSumWeights = *(new scalarList( NN, 0.0 ));
       }
       pointField faceCs = faceCentres(boundaryPoints, llf);
       vectorField faceNs = faceNormals(boundaryPoints, llf);
