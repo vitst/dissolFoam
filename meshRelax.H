@@ -97,6 +97,13 @@ private:
   scalar rlxTol;
   scalar k_1, k_2; // relaxation acceleration factors
   
+  int q_2;
+  int q_norm_recalc;
+  
+  scalar k_1edge, k_2edge;
+  int q_2edge;
+  int q_edge_norm_recalc;
+  
   bool variableGrading;
   scalar inigradingZ;
   scalar timeCoefZ;
@@ -182,12 +189,6 @@ public:
     label globalNN = NN;
     reduce(globalNN, sumOp<label>());
     
-    //Info<<"number of points: "<<globalNN<<nl;
-    // @TODO check 2D <-> 3D
-    //if(globalNN<5){
-    //  return globalDisplacement;
-    //}
-    
     labelListList nepe;
     forAll(local_wall_WallEdges, i){
       label ind = local_wall_WallEdges[i];
@@ -213,16 +214,21 @@ public:
     double displ_tol = 1.0;
     int itt = 0;
     vector nCyc(1.0,0.0,0.0);
+    scalarField aux_f0(NN, 0.0);
     
+    vectorField pointNorm( N, vector::zero );
+    scalarList faceToPointSumWeights( N, 0.0 );
     while(displ_tol>rlxTol){
+      if(itt%q_edge_norm_recalc==0){
+        pointNorm = *(new vectorField( N, vector::zero ));
+        faceToPointSumWeights = *(new scalarList( N, 0.0 ));
+      }
       pointField faceCs = faceCentres(boundaryPoints, llf);
       vectorField faceNs = faceNormals(boundaryPoints, llf);
       
       vectorField displacement(NN, vector::zero);
       scalarField tol(NN, 0.0);
-      vectorField pointNorm( NN, vector::zero );
       scalarList sumWeights( NN, 0.0 );
-      scalarList faceToPointSumWeights( NN, 0.0 );
       
       forAll(nepe, i){
         label  curI = local_wall_WallEdges[i];
@@ -245,31 +251,30 @@ public:
           displacement[i] += disp;
           tol[i] += mag_d;
           sumWeights[i] += 1;
-          //sumWeights[i] += nw;
         }
 
         
         // stick to cyclic boundary
         if( findIndex(local_wall_WallsCycEdges1, curI) != -1 ||
             findIndex(local_wall_WallsCycEdges2, curI) != -1){
-          //vector pdc = displacement[i];
-          //displacement[i] = transform(I - nCyc*nCyc, pdc);
           displacement[i].x() = 0.0;
         }
         
         
-        const labelList& pFaces = plistFaces[curI];
-        forAll(pFaces, j){
-          label faceI = pFaces[j];
-          point& faceC = faceCs[faceI];
-          vector d = faceC - curP;
-          scalar mag_d = mag(d);
-          
-          // this is for normal
-          scalar nw = 1.0 / mag_d;
-          pointNorm[i] += nw * faceNs[ faceI ];
-          pointNorm[i].z()=0;
-          faceToPointSumWeights[i] += nw;
+        if(itt%q_edge_norm_recalc==0){
+          const labelList& pFaces = plistFaces[curI];
+          forAll(pFaces, j){
+            label faceI = pFaces[j];
+            point& faceC = faceCs[faceI];
+            vector d = faceC - curP;
+            scalar mag_d = mag(d);
+
+            // this is for normal
+            scalar nw = 1.0 / mag_d;
+            pointNorm[i] += nw * faceNs[ faceI ];
+            pointNorm[i].z()=0;
+            faceToPointSumWeights[i] += nw;
+          }
         }
         
       }
@@ -277,16 +282,21 @@ public:
       syncTools::syncPointList(mesh_, global_WallEdges, displacement, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, global_WallEdges, tol, plusEqOp<scalar>(), 0.0);
       syncTools::syncPointList(mesh_, global_WallEdges, sumWeights, plusEqOp<scalar>(), 0.0);
-      syncTools::syncPointList(mesh_, global_WallEdges, pointNorm, plusEqOp<vector>(), vector::zero);
-      syncTools::syncPointList(mesh_, global_WallEdges, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
-      // normalization
-      forAll(pointNorm, i){
-        displacement[i] /= sumWeights[i];
-        pointNorm[i] /= mag( pointNorm[i] );
+      
+      if(itt%q_edge_norm_recalc==0){
+        syncTools::syncPointList(mesh_, global_WallEdges, pointNorm, plusEqOp<vector>(), vector::zero);
+        syncTools::syncPointList(mesh_, global_WallEdges, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
+        // normalization
+        forAll(pointNorm, i){
+          displacement[i] /= sumWeights[i];
+          pointNorm[i] /= mag( pointNorm[i] );
+        }
       }
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
+      scalar factor = (itt%q_2edge==0) ? k_2edge : k_1edge;
+      projectedDisplacement*=factor;
       
       forAll(local_wall_WallsCycEdges1, i){
         label ind = local_wall_WallsCycEdges1[i];
@@ -303,16 +313,12 @@ public:
         }
       }
       
-      
-      
       forAll(local_wall_WallEdges, i){
         label ind = local_wall_WallEdges[i];
-        
         boundaryPoints[ind] += projectedDisplacement[i];
       }
       
       scalarField aux_f = mag(projectedDisplacement)/tol;
-      scalarField aux_f0(NN, 0.0);
 
       if( aux_f == aux_f0 ){
         displ_tol = 0.0;
@@ -415,7 +421,7 @@ public:
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
-      scalar factor = (itt%2==0) ? k_2 : k_1;
+      scalar factor = (itt%q_2==0) ? k_2 : k_1;
       vectorField finalDisplacement = factor * projectedDisplacement;
       
       boundaryPoints += finalDisplacement;
@@ -470,15 +476,18 @@ public:
     
     double displ_tol = 1.0;
     int itt = 0;
-    vector nCyc(1.0,0.0,0.0);
     
-    while(displ_tol>rlxTol){
-      
+    vectorField pointNorm( N, vector::zero );
+    scalarList faceToPointSumWeights( N, 0.0 );
+    while(displ_tol>rlxTol)
+    {
+      if(itt%q_norm_recalc==0){
+        pointNorm = *(new vectorField( N, vector::zero ));
+        faceToPointSumWeights = *(new scalarList( N, 0.0 ));
+      }
       // calculate current face centers
       pointField faceCs = faceCentres(boundaryPoints, llf);
       vectorField faceNs = faceNormals(boundaryPoints, llf);
-      vectorField pointNorm( N, vector::zero );
-      scalarList faceToPointSumWeights( N, 0.0 );
 
       // create a displacement field for points
       vectorField displacement(N, vector::zero);
@@ -498,34 +507,24 @@ public:
           scalar mag_d = mag(d);
           
           vector disp;
-          
-          //if(global_WallInletEdges.size()<5){
-            //disp.x() = d.x() * 0.0;
-            //disp.y() = d.y() * 0.0;
-          //}
-          //else{
-            disp.x() = d.x() * pw[j].x();
-            disp.y() = d.y() * pw[j].y();
-          //}
-          //disp.x() = d.x() * 0.25;
-          //disp.y() = d.y() * 0.25;
+          disp.x() = d.x() * pw[j].x();
+          disp.y() = d.y() * pw[j].y();
           disp.z() = d.z() * pw[j].z();
           displacement[i] += disp;
           
           tol[i] += mag_d * mag(pw[j]);
           
           // this is for normal
-          scalar nw = 1.0 / mag_d;
-          pointNorm[i] += nw * faceNs[ faceI ];
-          faceToPointSumWeights[i] += nw;
+          if(itt%q_norm_recalc==0){
+            scalar nw = 1.0 / mag_d;
+            pointNorm[i] += nw * faceNs[ faceI ];
+            faceToPointSumWeights[i] += nw;
+          }
         }
         
         // stick to cyclic boundary
         if( findIndex(local_wall_WallsCycEdges1, i) != -1 ||
             findIndex(local_wall_WallsCycEdges2, i) != -1){
-          //vector pdc = displacement[i];
-          //displacement[i] = transform(I - nCyc*nCyc, pdc);
-          //Info<<curP.x()<<nl;
           displacement[i].x() = 0.0;
         }
         
@@ -535,15 +534,16 @@ public:
       syncTools::syncPointList(mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, meshPoints, tol, plusEqOp<scalar>(), 0.0);
       
-      syncTools::syncPointList(mesh_, meshPoints, pointNorm, plusEqOp<vector>(), vector::zero);
-      syncTools::syncPointList(mesh_, meshPoints, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
+      
+      if(itt%q_norm_recalc==0){
+        syncTools::syncPointList(mesh_, meshPoints, pointNorm, plusEqOp<vector>(), vector::zero);
+        syncTools::syncPointList(mesh_, meshPoints, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
 
-      // normalization
-      forAll(pointNorm, pointi){
-        pointNorm[pointi] /= faceToPointSumWeights[pointi];
-        
-        scalar pnd = mag(pointNorm[pointi]);
-        pointNorm[pointi] /= pnd;
+        // normalization
+        forAll(pointNorm, pointi){
+          pointNorm[pointi] /= faceToPointSumWeights[pointi];
+          pointNorm[pointi] /= mag(pointNorm[pointi]);
+        }
       }
       
       forAll(local_wall_WallsInletEdges, i){
@@ -566,20 +566,7 @@ public:
         projectedDisplacement[ind].x() = 0.0;
       }
       
-      /*
-      forAll(cycToAll1, i){
-        label ind = cycToAll1[i];
-        vector pdc = projectedDisplacement[ind];
-        projectedDisplacement[ind] = transform(I - nCyc*nCyc, pdc);
-      }
-      forAll(cycToAll2, i){
-        label ind = cycToAll2[i];
-        vector pdc = projectedDisplacement[ind];
-        projectedDisplacement[ind] = transform(I - nCyc*nCyc, pdc);
-      }
-      */
-      
-      scalar factor = (itt%2==0) ? k_2 : k_1;
+      scalar factor = (itt%q_2==0) ? k_2 : k_1;
       
       vectorField finalDisplacement = factor * projectedDisplacement;
       

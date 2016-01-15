@@ -78,6 +78,13 @@ meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
   k_1 = dissolProperties.lookupOrDefault<scalar>("k_1", 1.0);
   k_2 = dissolProperties.lookupOrDefault<scalar>("k_2", 1.0);
   
+  q_2 = dissolProperties.lookupOrDefault<int>("q_2", 1);
+  q_norm_recalc = dissolProperties.lookupOrDefault<int>("q_norm_recalc", 1);
+  
+  k_1edge = dissolProperties.lookupOrDefault<scalar>("k_1edge", 1.0);
+  k_2edge = dissolProperties.lookupOrDefault<scalar>("k_2edge", 1.0);
+  q_2edge = dissolProperties.lookupOrDefault<int>("q_2edge", 1);
+  q_edge_norm_recalc = dissolProperties.lookupOrDefault<int>("q_edge_norm_recalc", 1);
   
   Foam::Time timeTmp(Foam::Time::controlDictName, args);
   Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args);
@@ -101,6 +108,14 @@ meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
   Info << "dissolFoamDict, dissolDebug:  " << dissolDebug << endl;
   Info << "dissolFoamDict, fixInletConcentration:  " << fixInletWallEdgeDispl << endl;
   Info << "dissolFoamDict, rlxTol:  " << rlxTol << endl;
+  Info << "dissolFoamDict, k_1:  " << k_1 << endl;
+  Info << "dissolFoamDict, k_2:  " << k_2 << endl;
+  Info << "dissolFoamDict, q_2:  " << q_2 << endl;
+  Info << "dissolFoamDict, k_1edge:  " << k_1edge << endl;
+  Info << "dissolFoamDict, k_2edge:  " << k_2edge << endl;
+  Info << "dissolFoamDict, q_2edge:  " << q_2edge << endl;
+  Info << "dissolFoamDict, q_edge_norm_recalc:  " << q_edge_norm_recalc << endl;
+  Info << "dissolFoamDict, q_norm_recalc:  " << q_norm_recalc << endl;
   
   if( variableGrading ){
     Info << "dissolFoamDict, inigradingZ:  " << inigradingZ << endl;
@@ -336,7 +351,7 @@ vectorField meshRelax::calculateInletDisplacement(vectorField& wallDispl){
   // currnt wall points
   const pointField& wallBP = mesh_.boundaryMesh()[wallID].localPoints();
   // list of neighbor faces
-  const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
+  //const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
   // list of faces
   const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();
   // new points coordinates
@@ -426,7 +441,7 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
   // currnt wall points
   const pointField& wallBP = mesh_.boundaryMesh()[wallID].localPoints();
   // list of neighbor faces
-  const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
+  //const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
   // list of faces
   const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();
   // new points coordinates
@@ -561,8 +576,8 @@ void meshRelax::fixIWEdgeDispl( vectorField& concNorm ){
   forAll( inletTriple, i ){
     const labelList& currentTriple = inletTriple[i];
     
-    vector cN0 = concNorm[ currentTriple[0] ];
-    scalar c0 = mag( cN0 );
+    //vector cN0 = concNorm[ currentTriple[0] ];
+    //scalar c0 = mag( cN0 );
     vector cN1 = concNorm[ currentTriple[1] ];
     scalar c1 = mag( cN1 );
     vector cN2 = concNorm[ currentTriple[2] ];
