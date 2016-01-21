@@ -101,16 +101,11 @@ scalar fieldOperations::getInletAreaT0(){
       Foam::IOobject
       (
           Foam::fvMesh::defaultRegion,
+          timeTmp.timeName(),
           timeTmp,
           Foam::IOobject::MUST_READ
       )
   );
-  
-  scalar maxY = max( meshTmp.points().component(vector::Y) );
-  
-  Time& time = const_cast<Time&>(meshTmp.time());
-  Info<< "tmpMeshTime: " << time.timeName() << "  maxY: "<< maxY << endl;
-  std::exit(0);
   
   if( timeTmp.timeName()!="0" ){
     SeriousErrorIn("fieldOperations::getInletAreaT0")

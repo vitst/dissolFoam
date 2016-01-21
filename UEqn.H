@@ -2,11 +2,9 @@
 
     tmp<fvVectorMatrix> UEqn
     (
-        fvm::div(phi, U)
-      - fvm::laplacian(nu, U)
-      //+ turbulence->divDevReff(U)
-      ==
-        fvOptions(U)
+         fvm::div(phi, U)
+      -  fvm::laplacian(nu, U)
+      == fvOptions(U)
     );
 
     UEqn().relax();

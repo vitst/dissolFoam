@@ -1,8 +1,4 @@
 EXE_INC = \
-    -I$(LIB_SRC)/turbulenceModels \
-    -I$(LIB_SRC)/turbulenceModels/incompressible/RAS/RASModel \
-    -I$(LIB_SRC)/transportModels \
-    -I$(LIB_SRC)/transportModels/incompressible/singlePhaseTransportModel \
     -I$(LIB_SRC)/finiteVolume/lnInclude \
     -I$(LIB_SRC)/meshTools/lnInclude \
     -I$(LIB_SRC)/triSurface/lnInclude \
@@ -12,9 +8,6 @@ EXE_INC = \
     -I$(WM_PROJECT_USER_DIR)/lnInclude
 
 EXE_LIBS = \
-    -lincompressibleTurbulenceModel \
-    -lincompressibleRASModels \
-    -lincompressibleTransportModels \
     -lfiniteVolume \
     -lmeshTools \
     -ltriSurface \
@@ -25,7 +18,4 @@ EXE_LIBS = \
     -lsteadyStateControl \
     -lgsl \
     -lgslcblas
-
-
-
 

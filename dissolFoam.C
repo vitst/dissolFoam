@@ -29,29 +29,25 @@ Description
     the mesh according to the reactant flux.
 \*---------------------------------------------------------------------------*/
 
-#include <gsl/gsl_sf_hyperg.h>
+// OF includes
 
-//// OF includes
-// common OFe solver and OF simpleFoam
+// common and simpleFoam
 #include "fvCFD.H"
 
-// OF simpleFoam
-#include "singlePhaseTransportModel.H"
+// simpleFoam
 #include "fvIOoptionList.H"
-//#include "RASModel.H"  // currently no turbulence model
 
-// OFe
+// OF
 #include "pointPatchField.H"
 #include "dynamicFvMesh.H"
 #include "syncTools.H"
 
-// dissol prj
+// dissol project
 #include "steadyStateControl.H"
 #include "meshRelax.H"
 #include "fieldOperations.H"
 
-//// auxiliary includes
-// mesh search
+// auxiliary: includes mesh search
 #include "interpolation.H"
 #include "triSurface.H"
 #include "triSurfaceTools.H"
@@ -60,11 +56,9 @@ Description
 
 // interpolation and tables
 #include "interpolationTable.H"
-
 #include "memInfo.H"
 
-/*
- #######################################################################################
+/*######################################################################
  *    Main program body
  * 
  * Schematic fracture geometry:
@@ -77,9 +71,9 @@ Description
  * z     /  \                   z    |          |
  * |_ y      <------ inlet -->  |_ x
  * 
- * controlDictionary should have a subdictionary: CONVECTION_DIFFUSION, e.g.:
+ * fvSolution has a subdictionary: convDiff, e.g.:
  * 
- *      CONVECTION_DIFFUSION
+ *      convDiff
  *      {
  *        convergence                 1e-9;
  *        maxIter                     2000;
@@ -90,8 +84,8 @@ Description
  * - check the parameter preservePatches for cyclic BC
  * 
  * 
- #######################################################################################
-*/
+ #####################################################################*/
+
 int main(int argc, char *argv[])
 {
   #include "setRootCase.H"
@@ -101,38 +95,36 @@ int main(int argc, char *argv[])
   // OF simpleFoam  
   #include "createFvOptions.H" 
   
-  // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+  #include "readDicts.H"
   #include "createFields.H"
 
-  Info << "*****************************************************************"<<nl;
-  Info << "transportProperties, l_T:  " << l_T <<nl;
-  Info << "dissolFoamDict, inertia:   " << inertia <<nl;
-  Info << "dissolFoamDict, constFlux: " << constFlux <<nl;
-  Info << "*****************************************************************"<<endl;
-  
-  // Get patch ID for boundaries we want to move ("walls" "inlet")
+  // Get patch ID for moving boundaries ("walls" "inlet")
   const label wallID  = mesh.boundaryMesh().findPatchID("walls");
   const label inletID = mesh.boundaryMesh().findPatchID("inlet");
-  //label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
-  Info<< "Setup mesh relaxation class" << endl;
-  meshRelax* mesh_rlxPtr = new meshRelax(mesh, args);       // pointer to the mesh relaxation object
-  Info<< "Setup field operation class" << endl;
-  fieldOperations* fieldOpPtr = new fieldOperations(args, inletID);
-  
-  // calculating initial area of the inlet in order to scale U later
-  const scalar areaCoef0 = fieldOpPtr->getInletAreaT0();
-  
-  // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-  bool runTimeIs0 = (runTime.value()==0) ? true : false;
-  // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+  meshRelax* mesh_rlxPtr = new meshRelax(mesh, args);
+  Info << "Setup mesh relaxation class" << endl;
 
-  // MAIN TIME LOOP //
+  fieldOperations* fieldOpPtr = new fieldOperations(args, inletID);
+  Info << "Setup field operation class" << endl;
+  
+  const scalar inletAreaT0 = fieldOpPtr->getInletAreaT0();
+  Info << "Initial inlet area: " << inletAreaT0 << endl;
+  Info << "U field is scaled so that <U_inlet> = 1 at t=0" << nl;
+  Info << "phi field is unscaled" << nl
+       << "Used to recover scale factor after restart" << endl;
+
+  
+// * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
+
+  runTime.functionObjects().execute();     // Execute cntlDict functions
+  bool runTimeIs0 = (runTime.value()==0) ? true : false;
+
   while (runTime.run())
   {
-    if( !runTimeIs0 )
+    if( !runTimeIs0 )                      // No mesh update at t=0
     {
-      runTime++;                         // Don't update at t=0
+      runTime++;
       Info << "Begin cycle: Time = " << runTime.timeName() 
            << "    dt = " << runTime.deltaTValue()
            << nl << endl;
@@ -141,8 +133,10 @@ int main(int argc, char *argv[])
 // *********************************************************
 // *    Mesh motion & relaxation
 // *********************************************************
+
       // calculate mesh motion
-      vectorField pointDispWall = fieldOpPtr->getWallPointMotion(mesh, C, l_T, wallID);
+      vectorField pointDispWall = 
+            fieldOpPtr->getWallPointMotion(mesh, C, l_T, wallID);
       
       mesh_rlxPtr->meshUpdate(pointDispWall, runTime);
       
@@ -151,57 +145,95 @@ int main(int argc, char *argv[])
            << " s"<< nl<< endl;
     }
     
-// *********************************************************
-// *    Stokes flow
-// *********************************************************
+/*###############################################
+ *   Steady-state flow solver
+ *###############################################*/
+
     steadyStateControl simple(mesh);
     while ( simple.loop() )
     {
-      if(inertia){
-        #include "UEqn.H"
-        #include "pEqn.H"
-      }
-      else{
-        #include "UEqnStokes.H"
-        #include "pEqn.H"
-      }
+        if(inertia){                 // Navier Stokes
+            #include "UEqn.H"
+            #include "pEqn.H"
+        }
+        else{
+            #include "UEqnStokes.H"  // Stokes
+            #include "pEqn.H"
+        }
     }
-      
-    Info << "Flow solver: "
-         << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
-         <<"ClockTime = "<< runTime.elapsedClockTime() << " s"
-         << nl << nl << endl;
 
-// *********************************************************
-// *    Keeping flow rate constant
-// *********************************************************
-    scalar Q = fieldOpPtr->getInletFlowRate(phi, constFlux);
-    scalar nU = Q / areaCoef0;
-    Info << "U and phi scale factor: "<< nU << "   Q: "<< Q <<endl;
+    Info << "Flow solver: "
+    << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
+    <<"ClockTime = "<< runTime.elapsedClockTime() << " s"
+    << nl << nl << endl;
+
+/*###############################################
+ *   Scale U and phi 
+ *   constFlux == true  -> constant flow rate
+ *   constFlux == false -> constant pressure drop
+ *###############################################*/
+
+    scalar Q  = fieldOpPtr->getInletFlowRate(phi, constFlux);
+    scalar nU = Q / inletAreaT0;
+    Info << "U and phi scale factor: " << nU << "   Q: "<< Q <<endl;
+
     U   == U   / nU;
     phi == phi / nU;
-    
-// *********************************************************
-// *    Danckwerts boundary condition loop, Convenction-Diffusion
-// *********************************************************
-    Info << "Steady-state convection-diffusion"<< endl;
-    #include "convectionDiffusion.H"
 
-    if(gradCwrite) maggradC == mag(-fvc::grad(C));
+/*############################################
+ *   Steady-state convection-diffusion solver
+ *##########################################*/
+
+  Info << "Steady-state concentration solver"<< endl;
+
+  int iter = 0;
+  while ( true ){
+    iter++;
+
+    double residual = solve
+    (
+      fvm::div(phi, C) - fvm::laplacian(D, C) == fvOptions(C)
+    ).initialResidual();
     
-    // scale phi back in order to have correct value if restart
-    phi == phi * nU;
+    if( residual < convCrit ){
+      Info << "Convection-diffusion: "
+           << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
+           << "ClockTime = " << runTime.elapsedClockTime() << " s" <<nl 
+           << "Converged in " << iter << " steps" << nl << endl;
+
+      if(iter >= maxIter){
+        Info << nl << "dissolFoam Runtime WARNING:"
+             << "Convection-diffusion solver did not converge." << nl
+             <<"Maximum number of iterations"
+             <<"  iter: "<< iter << endl;
+      }
+      break;
+    }
+    else{
+      Info << " Step " << iter
+           << " residual: "<< residual << " > " << convCrit << endl;
+    }
+  }
 
 // *********************************************************
 // *    Write Output data
 // *********************************************************
+
+    if(gradCWrite) gradC == -fvc::snGrad(C);
+    
+    // Rescale phi for restart and for next cycle
+    phi == phi * nU;
+
     Info << "Write fields: Time = " << runTime.timeName() << nl <<endl;
     (runTimeIs0) ? runTime.writeNow() : runTime.write();
     runTimeIs0 = false;
+
+    // Rescale U for next cycle
+    U == U * nU;
   }
 
   Info << "End" << endl;
   return 0;
 }
 
-// **************************** End of the solver ******************************** //
+// ********************* End of the solver ************************** //
