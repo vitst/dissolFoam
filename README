@@ -1,6 +1,6 @@
 This is the OpenFoam solver. It solves for flow (Stokes) and transport (steady-state) and moves
 the mesh according to the reactant flux.
 
-It works with OpenFOAM 2.x.x
+It works with OpenFOAM 2.x.x. Some additional libraries are necessary.
 
 The moving interface in polyMesh/boundary should go last.
