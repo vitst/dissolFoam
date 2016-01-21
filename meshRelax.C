@@ -495,7 +495,7 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
     forAll(local_wall_WallsOutletEdges, i){
       displacement[i].z() = minZ - edgePoints[i].z();
     }
-    vectorField proj_disp = transform(I - edgeNorms*edgeNorms/8.0, displacement);
+    vectorField proj_disp = transform(I - edgeNorms*edgeNorms, displacement);
     
     scalarField aux_f = mag(proj_disp);
     scalarField aux_f0(N, 0.0);
@@ -528,16 +528,6 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
     wallDispl[ pointI ] = edgePoints[i]-wallBP[pointI];
   }
   
-  
-  /*
-  forAll(local_wall_WallsOutletEdges, i){
-    vector A = wallDispl[ local_wall_WallsOutletEdges[i] ];
-    vector dz(0.0, 0.0, maxdZ - A.z());
-          
-    wallDispl[ local_wall_WallsOutletEdges[i] ] += dz;
-  }
-  */
-
   return pointDispOutlet;
 }
 

@@ -50,23 +50,29 @@ Contributors/Copyright:
 class fieldOperations{
 
 private:
+  const argList args_;
+  const label inletID_;
   
+  // aux. parameter in order to calculate inlet flow rate at t0 only once
+  bool inletFlowRateT0calculated;
+  // aux. parameter where we store inlet flow rate ar t0
+  scalar inletFlowRateT0;
+  
+  // functions
+  scalar getInletFlowRateT0(const surfaceScalarField&);
 public:
   
   // Constractors
-  fieldOperations();
+  fieldOperations(const argList&, const label);
   
   // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   // functions
   
-  scalar getConstFlowRateFactor(const fvMesh&, const volVectorField&, scalar);
+  scalar getInletFlowRate(const surfaceScalarField&, bool);
 
-  scalar calcDanckwerts(const fvMesh&, const volVectorField&,
-                        volScalarField&, label, scalar);
+  vectorField getWallPointMotion(const fvMesh&, const volScalarField&, const scalar, const label);
   
-  vectorField getWallPointMotion(const fvMesh&, const volScalarField&, scalar, label);
-  
-  scalar getInletArea(const argList&, bool);
+  scalar getInletAreaT0();
 };
 
 

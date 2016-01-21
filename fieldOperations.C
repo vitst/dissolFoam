@@ -12,71 +12,69 @@
 #include "pointPatchField.H"
 #include "volPointInterpolation.H"
 
-fieldOperations::fieldOperations()
+fieldOperations::fieldOperations(const argList& args, const label inletID)
+:
+args_(args),
+inletID_(inletID)
 {
-
+  inletFlowRateT0calculated = false;
+  inletFlowRateT0 = 0.0;
 }
 
-scalar fieldOperations::getConstFlowRateFactor(const fvMesh& mesh, 
-        const volVectorField& U, 
-        scalar areaCoef0)
+
+scalar fieldOperations::getInletFlowRateT0(const surfaceScalarField& phi)
 {
+  if( !inletFlowRateT0calculated ){
+    Foam::Time timeTmp(Foam::Time::controlDictName, args_);
+    Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args_);
+    timeTmp.setTime(timeDirs[0], 0);
 
-  scalar magU = mag( fvc::domainIntegrate( U ).value() );
+    Foam::fvMesh meshTmp
+    (
+        Foam::IOobject
+        (
+            Foam::fvMesh::defaultRegion,
+            timeTmp.timeName(),
+            timeTmp,
+            Foam::IOobject::MUST_READ
+        )
+    );
 
-  vectorField po = mesh.points();
-  scalar maxZ = max( po.component(vector::Z) );
-  reduce(maxZ, maxOp<scalar>());
-  scalar minZ = min( po.component(vector::Z) );
-  reduce(minZ, minOp<scalar>());
-
-  scalar nU = magU / ((maxZ-minZ) * areaCoef0);
-
-  return nU;
-}
-
-scalar fieldOperations::calcDanckwerts(const fvMesh& mesh,
-        const volVectorField& U,
-        volScalarField& C,
-        label inletID,
-        scalar D)
-{
-  // C field at the inlet
-  const scalarField& oldC = C.boundaryField()[inletID];
-  scalarField newC(oldC.size(), 0.0);
-
-  const labelList& fc = mesh.boundaryMesh()[inletID].faceCells();
-  const vectorField& fcr = mesh.boundaryMesh()[inletID].faceCentres();
-  const vectorField& ccr = mesh.cellCentres();
-  forAll(fc, ii){
-    label fcL = fc[ii]; // label of the cell the face belong to
-    vector vdel = fcr[ii]-ccr[fcL];
-    scalar del = mag(vdel.z());
-
-    scalar aa = ( mag(U[fcL].z()) * del) / D;
+    surfaceScalarField phiTmp
+    (
+        IOobject
+        (
+            "phi",
+            timeTmp.timeName(),
+            meshTmp,
+            IOobject::READ_IF_PRESENT,
+            IOobject::NO_WRITE
+        ),
+        phi
+    );
     
-    //newC[ii] = (1.0+aa*C[fcL])/(1.0+aa);
-    newC[ii] = (aa+C[fcL])/(aa+1.0);
-  }
-  scalarField diff = newC - oldC;
-
-  C.boundaryField()[inletID]==newC;
+    // in case 0 time does not exist
+    if( timeTmp.timeName()!="0" ){
+      SeriousErrorIn("fieldOperations::getInletFlowRateT0")
+              <<"There is no 0 time dictionary. Check your decomposition as well!"
+              <<exit(FatalError);
+    }
   
-  scalar ttt  = mag( gSum( diff ) );
-  //reduce(ttt, sumOp<scalar>());
-  scalar tttn = mag( gSum( newC ) );
-  //reduce(tttn, sumOp<scalar>());
+    inletFlowRateT0 = -gSum( phiTmp.boundaryField()[inletID_] );
+    inletFlowRateT0calculated = true;
+  }
+  return inletFlowRateT0;
+}
 
-  scalar tttol = 0.0;
-  if( tttn!=0.0 ) tttol = ttt/tttn;
-        
-  return tttol;
+scalar fieldOperations::getInletFlowRate(const surfaceScalarField& phi, bool updateFlowRate)
+{
+  return ((updateFlowRate) ? -gSum(phi.boundaryField()[inletID_]):getInletFlowRateT0(phi));
 }
 
 
 vectorField fieldOperations::getWallPointMotion(const fvMesh& mesh,const volScalarField& C,
-                                               scalar l_T, label wallID
-){
+                                               const scalar l_T, const label wallID)
+{
   // interpolate the concentration from cells to wall faces
   coupledPatchInterpolation patchInterpolator( mesh.boundaryMesh()[wallID], mesh );
 
@@ -84,58 +82,42 @@ vectorField fieldOperations::getWallPointMotion(const fvMesh& mesh,const volScal
   scalarField pointCface = -C.boundaryField()[wallID].snGrad();
   vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
   
-  /*
-  for(int i=0;i<10;i++){
-    Info<<i<<"  points  C  "<<pointCface[i]<<"   n  "<<pointNface[i]<<nl;
-  }
-  */
-  // ----------------------------------------------------------------
-  
   scalarField motionC = patchInterpolator.faceToPointInterpolate(pointCface);
   vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
-  
-  /*
-  for(int i=0;i<10;i++){
-    Info<<i<<"  C  "<<motionC[i]<<"   n  "<<motionN[i]<<nl;
-  }
-  */
   
   // normalize point normals to 1
   forAll(motionN, ii) motionN[ii]/=mag(motionN[ii]);
   
-  /*
-  for(int i=0;i<10;i++){
-    Info<<"   norm  "<<motionN[i]<<nl;
-  }
-  */
-  
   return (l_T*motionC*motionN);
 }
 
-scalar fieldOperations::getInletArea(const argList& args, bool constFlux){
-  Foam::Time timeTmp(Foam::Time::controlDictName, args);
-  if(!constFlux){
-    Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args);
-    timeTmp.setTime(timeDirs[0], 0);
-  }
+scalar fieldOperations::getInletAreaT0(){
+  Foam::Time timeTmp(Foam::Time::controlDictName, args_);
+  Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args_);
+  timeTmp.setTime(timeDirs[0], 0);
   
   Foam::fvMesh meshTmp
   (
       Foam::IOobject
       (
           Foam::fvMesh::defaultRegion,
-          timeTmp.timeName(),
           timeTmp,
           Foam::IOobject::MUST_READ
       )
   );
   
-  scalar areaCoef = 0.0;
-  const surfaceScalarField& magSf2 = meshTmp.magSf();
-  label inletID = meshTmp.boundaryMesh().findPatchID("inlet");
-  forAll(magSf2.boundaryField()[inletID], facei){
-    areaCoef += magSf2.boundaryField()[inletID][facei];
+  scalar maxY = max( meshTmp.points().component(vector::Y) );
+  
+  Time& time = const_cast<Time&>(meshTmp.time());
+  Info<< "tmpMeshTime: " << time.timeName() << "  maxY: "<< maxY << endl;
+  std::exit(0);
+  
+  if( timeTmp.timeName()!="0" ){
+    SeriousErrorIn("fieldOperations::getInletAreaT0")
+            <<"There is no 0 time dictionary. Check your decomposition as well!"
+            <<exit(FatalError);
   }
-  reduce(areaCoef, sumOp<scalar>());
-  return areaCoef;
+  
+  const surfaceScalarField& magSf2 = meshTmp.magSf();
+  return gSum( magSf2.boundaryField()[inletID_] );
 }

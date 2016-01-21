@@ -111,17 +111,17 @@ int main(int argc, char *argv[])
   Info << "*****************************************************************"<<endl;
   
   // Get patch ID for boundaries we want to move ("walls" "inlet")
-  label wallID  = mesh.boundaryMesh().findPatchID("walls");
-  //label inletID = mesh.boundaryMesh().findPatchID("inlet");
+  const label wallID  = mesh.boundaryMesh().findPatchID("walls");
+  const label inletID = mesh.boundaryMesh().findPatchID("inlet");
   //label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
   Info<< "Setup mesh relaxation class" << endl;
   meshRelax* mesh_rlxPtr = new meshRelax(mesh, args);       // pointer to the mesh relaxation object
   Info<< "Setup field operation class" << endl;
-  fieldOperations* fieldOpPtr = new fieldOperations(); // pointer to the mesh relaxation object
+  fieldOperations* fieldOpPtr = new fieldOperations(args, inletID);
   
   // calculating initial area of the inlet in order to scale U later
-  scalar areaCoef = fieldOpPtr->getInletArea(args, constFlux);
+  const scalar areaCoef0 = fieldOpPtr->getInletAreaT0();
   
   // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
   bool runTimeIs0 = (runTime.value()==0) ? true : false;
@@ -143,13 +143,6 @@ int main(int argc, char *argv[])
 // *********************************************************
       // calculate mesh motion
       vectorField pointDispWall = fieldOpPtr->getWallPointMotion(mesh, C, l_T, wallID);
-      // move and relax the mesh (@TODO separate surface motion and relaxation)
-      
-      /*
-      for(int i=0;i<10;i++){
-        Info<<i<<"  "<<pointDispWall[i]<<nl;
-      }
-      */
       
       mesh_rlxPtr->meshUpdate(pointDispWall, runTime);
       
@@ -182,13 +175,12 @@ int main(int argc, char *argv[])
 // *********************************************************
 // *    Keeping flow rate constant
 // *********************************************************
-    if(constFlux){
-      areaCoef = fieldOpPtr->getInletArea(args, constFlux);
-    }
-    scalar nU = fieldOpPtr->getConstFlowRateFactor(mesh, U, areaCoef);
+    scalar Q = fieldOpPtr->getInletFlowRate(phi, constFlux);
+    scalar nU = Q / areaCoef0;
+    Info << "U and phi scale factor: "<< nU << "   Q: "<< Q <<endl;
     U   == U   / nU;
     phi == phi / nU;
-      
+    
 // *********************************************************
 // *    Danckwerts boundary condition loop, Convenction-Diffusion
 // *********************************************************
@@ -196,7 +188,10 @@ int main(int argc, char *argv[])
     #include "convectionDiffusion.H"
 
     if(gradCwrite) maggradC == mag(-fvc::grad(C));
-      
+    
+    // scale phi back in order to have correct value if restart
+    phi == phi * nU;
+
 // *********************************************************
 // *    Write Output data
 // *********************************************************
