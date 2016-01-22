@@ -102,13 +102,13 @@ int main(int argc, char *argv[])
   const label wallID  = mesh.boundaryMesh().findPatchID("walls");
   const label inletID = mesh.boundaryMesh().findPatchID("inlet");
   
-  meshRelax* mesh_rlxPtr = new meshRelax(mesh, args);
-  Info << "Setup mesh relaxation class" << endl;
+  meshRelax mesh_rlxPtr(mesh, args);
+  Info << "Setup mesh relaxation object" << endl;
 
-  fieldOperations* fieldOpPtr = new fieldOperations(args, inletID);
-  Info << "Setup field operation class" << endl;
+  fieldOperations fieldOpPtr(args, inletID);
+  Info << "Setup field operation object" << endl;
   
-  const scalar inletAreaT0 = fieldOpPtr->getInletAreaT0();
+  const scalar inletAreaT0 = fieldOpPtr.getInletAreaT0();
   Info << "Initial inlet area: " << inletAreaT0 << endl;
   Info << "U field is scaled so that <U_inlet> = 1 at t=0" << nl;
   Info << "phi field is unscaled" << nl
@@ -136,9 +136,9 @@ int main(int argc, char *argv[])
 
       // calculate mesh motion
       vectorField pointDispWall = 
-            fieldOpPtr->getWallPointMotion(mesh, C, l_T, wallID);
+            fieldOpPtr.getWallPointMotion(mesh, C, l_T, wallID);
       
-      mesh_rlxPtr->meshUpdate(pointDispWall, runTime);
+      mesh_rlxPtr.meshUpdate(pointDispWall, runTime);
       
       Info << "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
            << " s" << "  ClockTime = " << runTime.elapsedClockTime()
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
  *   constFlux == false -> constant pressure drop
  *###############################################*/
 
-    scalar Q  = fieldOpPtr->getInletFlowRate(phi, constFlux);
+    scalar Q  = fieldOpPtr.getInletFlowRate(phi, constFlux);
     scalar nU = Q / inletAreaT0;
     Info << "U and phi scale factor: " << nU << "   Q: "<< Q <<endl;
 
