@@ -7,15 +7,8 @@
 #include "meshRelax.H"
 
 #include "Pstream.H"
-
 #include "pyramidPointFaceRef.H"
-
-//#include "transformField.H"
-//#include "symmTransformField.H"
-
 #include "triPointRef.H"
-
-#include <algorithm>
 
 // mesh1 is the mesh at time 0
 meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
@@ -30,9 +23,9 @@ meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
   outletID = mesh_.boundaryMesh().findPatchID("outlet");
 
   // map vetex ID: patch to global
-  wallsToAll  = mesh_.boundaryMesh()[wallID].meshPoints();
-  inletToAll  = mesh_.boundaryMesh()[inletID].meshPoints();
-  outletToAll = mesh_.boundaryMesh()[outletID].meshPoints();
+  //wallsToAll  = mesh_.boundaryMesh()[wallID].meshPoints();
+  //inletToAll  = mesh_.boundaryMesh()[inletID].meshPoints();
+  //outletToAll = mesh_.boundaryMesh()[outletID].meshPoints();
 
   setUpLists();
   setUpPairsConc();
@@ -175,25 +168,19 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
 
 // Relaxing edges. 1D
   Info<<"Relaxing the inlet-wall edge..."<< endl;
-  vectorField wiEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[inletID], rlxTol, inletWeights);
+  vectorField wiEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[inletID], inletWeights);
   pointField mpWIE = doWallDisplacement( wiEdgeRlx );
   mesh_.movePoints( mpWIE );
 
   Info<<"Relaxing the outlet-wall edge..."<< endl;
-  vectorField woEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[outletID], rlxTol, outletWeights);
+  vectorField woEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[outletID], outletWeights);
   pointField mpWOE = doWallDisplacement( woEdgeRlx );
   mesh_.movePoints( mpWOE );
 
 // *********************************************************************************
 // Relaxing surfaces. 2D
   Info<<"Relaxing the wall... time: "<< time.cpuTimeIncrement() << endl;
-  vectorField wallRelax;
-  if( variableGrading ){
-    wallRelax = wallRelaxation( mesh_.boundaryMesh()[wallID], wallWeights, rlxTol);
-  }
-  else{
-    wallRelax = wallRelaxation2( mesh_.boundaryMesh()[wallID], wallWeights, rlxTol);
-  }
+  vectorField wallRelax = wallRelaxation(mesh_.boundaryMesh()[wallID], wallWeights);
   Info << "Wall relaxation time: " << time.cpuTimeIncrement() << " s" << endl;
 
   mesh_.movePoints( savedPointsAll );
@@ -204,11 +191,11 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
                           + pointDispWall * deltaT;
 
   Info << "Relaxing inlet..." << endl;
-  vectorField inlRelax = inletOutletRlx( mesh_.boundaryMesh()[inletID], rlxTol, vvff);
+  vectorField inlRelax = inletOutletRlx( mesh_.boundaryMesh()[inletID], vvff);
   Info << "Inlet relaxation time: " << time.cpuTimeIncrement() << " s" << endl;
 
   Info << "Relaxing outlet..." << endl;
-  vectorField outRelax = inletOutletRlx( mesh_.boundaryMesh()[outletID], rlxTol, vvff);
+  vectorField outRelax = inletOutletRlx( mesh_.boundaryMesh()[outletID], vvff);
   Info << "Outlet relaxation time: " << time.cpuTimeIncrement() << " s" << endl;
   
   
@@ -541,6 +528,7 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
 
 pointField meshRelax::doInletDisplacement(const vectorField& inletDispl){
   pointField newPoints = mesh_.points();
+  const labelList& inletToAll = mesh_.boundaryMesh()[inletID].meshPoints();
   forAll(inletDispl, i){
     label indx = inletToAll[i];
     newPoints[indx] += inletDispl[i];
@@ -550,6 +538,7 @@ pointField meshRelax::doInletDisplacement(const vectorField& inletDispl){
 
 pointField meshRelax::doWallDisplacement(const vectorField& wallDispl){
   pointField newPoints = mesh_.points();
+  const labelList& wallsToAll  = mesh_.boundaryMesh()[wallID].meshPoints();
   forAll(wallDispl, i){
     label indx = wallsToAll[i];
     newPoints[indx] += wallDispl[i];
@@ -559,6 +548,7 @@ pointField meshRelax::doWallDisplacement(const vectorField& wallDispl){
 
 pointField meshRelax::doOutletDisplacement(const vectorField& outletDispl){
   pointField newPoints = mesh_.points();
+  const labelList& outletToAll = mesh_.boundaryMesh()[outletID].meshPoints();
   forAll(outletDispl, i){
     label indx = outletToAll[i];
     newPoints[indx] += outletDispl[i];
@@ -702,16 +692,11 @@ void meshRelax::setUpPairsConc(){
   
 }
 
-void meshRelax::setUpLists(){
-  // if cyclic boundary exists
-  cycID1 = mesh_.boundaryMesh().findPatchID("periodicx1");
-  cycID2 = mesh_.boundaryMesh().findPatchID("periodicx2");
-
-  if(cycID1!=-1 && cycID2!=-1){
-    // map vetex ID: patch to global
-    cycToAll1  = mesh_.boundaryMesh()[cycID1].meshPoints();
-    cycToAll2  = mesh_.boundaryMesh()[cycID2].meshPoints();
-  }
+void meshRelax::setUpLists()
+{
+  const labelList& wallsToAll  = mesh_.boundaryMesh()[wallID].meshPoints();
+  const labelList& inletToAll  = mesh_.boundaryMesh()[inletID].meshPoints();
+  const labelList& outletToAll = mesh_.boundaryMesh()[outletID].meshPoints();
   
   forAll(wallsToAll, i){
     label lW = wallsToAll[i];
@@ -728,8 +713,21 @@ void meshRelax::setUpLists(){
       local_wall_WallsOutletEdges.append( i );
       global_WallOutletEdges.append( lW );
     }
+  }
+  
+  // if cyclic boundary exists
+  const label& cycID1 = mesh_.boundaryMesh().findPatchID("periodicx1");
+  const label& cycID2 = mesh_.boundaryMesh().findPatchID("periodicx2");
+
+  if(cycID1!=-1 && cycID2!=-1){
+    // map vetex ID: patch to global
+    const labelList& cycToAll1  = mesh_.boundaryMesh()[cycID1].meshPoints();
+    const labelList& cycToAll2  = mesh_.boundaryMesh()[cycID2].meshPoints();
     
-    if(cycID1!=-1 && cycID2!=-1){
+    forAll(wallsToAll, i)
+    {
+      label lW = wallsToAll[i];
+
       if( findIndex(cycToAll1, lW) != -1){
         local_wall_WallsCycEdges1.append( i );
       }
@@ -741,7 +739,9 @@ void meshRelax::setUpLists(){
   
 }
 
-float meshRelax::get_version(){
+float meshRelax::get_version() const{
   return version;
 }
-
+word meshRelax::get_date() const{
+  return date;
+}

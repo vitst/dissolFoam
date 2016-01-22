@@ -51,55 +51,37 @@ Contributors/Copyright:
 
 typedef List<vectorField> vectorFieldList;
 
-class meshRelax{
+class meshRelax
+{
+public:
+  
+  // Constructors
+  meshRelax(dynamicFvMesh&, const argList&);
 
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  // public functions
+  void meshUpdate(vectorField&, Time&);
+
+  float get_version() const;
+  word get_date() const;
+  
 private:
-
+  // the version of meshRelax and date it was modified
   const float version;
   const word date;
-
-  //fvMesh& mesh_;
-  dynamicFvMesh& mesh_;
-  scalar deltaT;
-
-  // ID of each patch
-  label wallID, inletID, outletID;
-
-  // vetex ID maps: patch to global
-  labelList wallsToAll, inletToAll, outletToAll;
+  ////////////////////////////////////////////////////
   
-  // if cyclic is present
-  label cycID1, cycID2;
-  labelList cycToAll1, cycToAll2;
-  labelList local_wall_WallsCycEdges1;
-  labelList local_wall_WallsCycEdges2;
-
-  // list of local (local for the wall) IDs for walls- inlet and outlet edges
-  labelList local_wall_WallsInletEdges;
-  labelList local_wall_WallsOutletEdges;
-
-  // list of global IDs for walls- inlet and outlet edges
-  labelList global_WallInletEdges;
-  labelList global_WallOutletEdges;
-  
-  
-  labelList local_inlet_WallsInletEdges;
-  
-  labelList local_outlet_WallsOutletEdges;
-  
-  // map for the extrapolation of the concentration on the edge
-  // it fixes inlet boundary condition inconsistance
-  labelListList inletTriple;
-  
-  // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  // dictionary variables
   bool dissolDebug;
   bool fixInletWallEdgeDispl;
   scalar rlxTol;
-  scalar k_1, k_2; // relaxation acceleration factors
   
+  // relaxation acceleration factors for the wall relaxation
+  scalar k_1, k_2; 
   int q_2;
   int q_norm_recalc;
   
+  // relaxation acceleration factors for the edge relaxation
   scalar k_1edge, k_2edge;
   int q_2edge;
   int q_edge_norm_recalc;
@@ -108,11 +90,39 @@ private:
   scalar inigradingZ;
   scalar timeCoefZ;
   int Nz;
+  ////////////////////////////////////////////////////
+  dynamicFvMesh& mesh_;
+  scalar deltaT;
+  // ID of each patch
+  label wallID, inletID, outletID;
+  
+  // list of local (local for the wall) IDs for walls- inlet and outlet edges
+  labelList local_wall_WallsInletEdges;
+  labelList local_wall_WallsOutletEdges;
+
+  // list of global IDs for walls- inlet and outlet edges
+  labelList global_WallInletEdges;
+  labelList global_WallOutletEdges;
+  
+  labelList local_inlet_WallsInletEdges;
+  labelList local_outlet_WallsOutletEdges;
+  
+  // if cyclic is present
+  labelList local_wall_WallsCycEdges1;
+  labelList local_wall_WallsCycEdges2;
+
+  
+  // map for the extrapolation of the concentration on the edge
+  // it fixes inlet boundary condition inconsistance
+  labelListList inletTriple;
+  
   vectorFieldList wallWeights;
   vectorFieldList inletWeights;
   vectorFieldList outletWeights;
-  // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+  
+  ///////////////////////////////////////////////////////////////////////////
+  // private functions
+  ///////////////////////////////////////////////////////////////////////////
   vector extrapolateVectorLinear(const pointField&, vector&, vector&, const labelList&);
   
   scalar extrapolateConcentrationExp(const pointField&, scalar&, scalar&, const labelList&);
@@ -121,10 +131,10 @@ private:
   scalar extrapolateConcentrationLinear(const pointField&, scalar&, scalar&, const labelList&);
   scalar extrapolateConcentrationLinearZ(const pointField&, scalar&, scalar&, const labelList&);
 
-  Foam::pointField faceCentres(const pointField& points, const List<face>& flist) const;
-  Foam::vectorField faceNormals(const pointField& points, const List<face>& flist) const;
+  pointField faceCentres(const pointField& points, const List<face>& flist) const;
+  vectorField faceNormals(const pointField& points, const List<face>& flist) const;
 
-  Foam::vectorField localFaceToPointNormalInterpolate(
+  vectorField localFaceToPointNormalInterpolate(
           const pointField& points,
           const pointField& faceCs,
           const vectorField& faceNs,
@@ -133,20 +143,9 @@ private:
 
   ) const;
   
-public:
-  
-  // Constructors
-  meshRelax(dynamicFvMesh&, const argList&);
-
-  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  
-  void meshUpdate(vectorField&, Time&);
-
   void fixIWEdgeDispl( vectorField& );
-  
   // fix edge displacement and calculate inlet displ.
   vectorField calculateInletDisplacement( vectorField& );
-  
   vectorField calculateOutletDisplacement( vectorField& );
   
   pointField doInletDisplacement(const vectorField&);
@@ -155,23 +154,35 @@ public:
   
   vectorField normalsOnTheEdge();
   
-  template<class Patch>
-  vectorField edgeRelaxation(Patch& patchIO_, double rlxTol, vectorFieldList& wv){
-    
-    Patch& patch_ = mesh_.boundaryMesh()[wallID];
-    const List<face>& llf = patch_.localFaces();
-    const labelListList& plistFaces = patch_.pointFaces();
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-    pointField boundaryPoints = patch_.localPoints();
+  // set up pairs for concentration extrapollation on the edge
+  void setUpPairsConc();
+
+  // setup lists needed for mesh relaxation
+  void setUpLists();
+
+  
+  
+  
+  
+  template<class Patch>
+  vectorField edgeRelaxation(Patch& patchIO_, vectorFieldList& wv){
+    
+    Patch& wall_patch = mesh_.boundaryMesh()[wallID];
+    const List<face>& llf = wall_patch.localFaces();
+    const labelListList& plistFaces = wall_patch.pointFaces();
+
+    pointField boundaryPoints = wall_patch.localPoints();
     int N = boundaryPoints.size();
     
-    const labelListList& ppp = patch_.pointEdges();
-    const edgeList& ee = patch_.edges();
+    const labelListList& ppp = wall_patch.pointEdges();
+    const edgeList& ee = wall_patch.edges();
     
     vectorField globalDisplacement(N, vector::zero);
     
     const labelList& meshPoints = patchIO_.meshPoints();
-    const labelList& wallsTo  = patch_.meshPoints();
+    const labelList& wallsTo  = wall_patch.meshPoints();
     labelList local_wall_WallEdges;
     labelList global_WallEdges;
     forAll(wallsTo, i){
@@ -214,7 +225,7 @@ public:
     double displ_tol = 1.0;
     int itt = 0;
     vector nCyc(1.0,0.0,0.0);
-    scalarField aux_f0(NN, 0.0);
+    //scalarField aux_f0(NN, 0.0);
     
     vectorField pointNorm( NN, vector::zero );
     scalarList faceToPointSumWeights( NN, 0.0 );
@@ -321,8 +332,8 @@ public:
         boundaryPoints[ind] += projectedDisplacement[i];
       }
       
+      /*
       scalarField aux_f = mag(projectedDisplacement)/tol;
-
       if( aux_f == aux_f0 ){
         displ_tol = 0.0;
       }
@@ -332,144 +343,27 @@ public:
 
       reduce(displ_tol, sumOp<scalar>());
       displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
+      */
+      
+      //displ_tol = gAverage( mag(projectedDisplacement/factor)/tol );
+      displ_tol = gAverage( mag(projectedDisplacement/factor)/tol );
       
       if(itt%1000==0){
-        Info<<patch_.name()<<"  rlx iter "<<itt<<"  tolerance: "<<displ_tol<< endl;
+        Info<<patchIO_.name()<<"  rlx iter "<<itt<<"  tolerance: "<<displ_tol<< endl;
       }
       
       itt+=1;
     }
     
     forAll(globalDisplacement, i){
-      globalDisplacement[i] = boundaryPoints[i]-patch_.localPoints()[i];
+      globalDisplacement[i] = boundaryPoints[i]-wall_patch.localPoints()[i];
     }
     
     return globalDisplacement;
   }
 
-  
   template<class Patch>
-  vectorField wallRelaxation(Patch& patch_, const vectorFieldList& weights, double rlxTol){
-    const List<face>& llf = patch_.localFaces();
-    const labelList& meshPoints = patch_.meshPoints();
-    const labelListList& plistFaces = patch_.pointFaces();
-
-    pointField boundaryPoints = patch_.localPoints();
-    int N = boundaryPoints.size();
-    
-    double displ_tol = 1.0;
-    int itt = 0;
-    while(displ_tol>rlxTol){
-      
-      // calculate current face centers
-      pointField faceCs = faceCentres(boundaryPoints, llf);
-      vectorField faceNs = faceNormals(boundaryPoints, llf);
-      vectorField pointNorm( N, vector::zero );
-      scalarList faceToPointSumWeights( N, 0.0 );
-
-      // create a displacement field for points
-      vectorField displacement(N, vector::zero);
-      scalarField tol(N, 0.0);
-      
-      forAll(boundaryPoints, i){
-        point& curP = boundaryPoints[i];
-        const labelList& pFaces = plistFaces[i];
-        const vectorField& pw = weights[i];
-
-        forAll(pFaces, j){
-          label faceI = pFaces[j];
-          point& faceC = faceCs[faceI];
-
-          vector d = faceC - curP;
-          
-          scalar mag_d = mag(d);
-          
-          vector disp;
-          disp.x() = d.x() * pw[j].x();
-          disp.y() = d.y() * pw[j].y();
-          disp.z() = d.z() * pw[j].z();
-          displacement[i] += disp;
-          
-          tol[i] += mag_d * mag(pw[j]);
-          
-          // this is for normal
-          scalar nw = 1.0 / mag_d;
-          pointNorm[i] += nw * faceNs[ faceI ];
-          faceToPointSumWeights[i] += nw;
-        }
-      }
-      
-      // synchronizing over the cyclic and processor boundaries
-      syncTools::syncPointList(mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
-      syncTools::syncPointList(mesh_, meshPoints, tol, plusEqOp<scalar>(), 0.0);
-      
-      syncTools::syncPointList(mesh_, meshPoints, pointNorm, plusEqOp<vector>(), vector::zero);
-      syncTools::syncPointList(mesh_, meshPoints, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
-      // normalization
-      forAll(pointNorm, pointi){
-        pointNorm[pointi] /= faceToPointSumWeights[pointi];
-        
-        scalar pnd = mag(pointNorm[pointi]);
-        pointNorm[pointi] /= pnd;
-      }
-      
-      forAll(local_wall_WallsInletEdges, i){
-        label ind = local_wall_WallsInletEdges[i];
-        displacement[ind] = vector::zero;
-      }
-      forAll(local_wall_WallsOutletEdges, i){
-        label ind = local_wall_WallsOutletEdges[i];
-        displacement[ind] = vector::zero;
-      }
-
-      vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
-      
-      scalar factor = (itt%q_2==0) ? k_2 : k_1;
-      vectorField finalDisplacement = factor * projectedDisplacement;
-      
-      boundaryPoints += finalDisplacement;
-      
-      scalarField aux_f = mag(finalDisplacement)/tol;
-      scalarField aux_f0(finalDisplacement.size(), 0.0);
-      
-      if( aux_f == aux_f0 ){
-        displ_tol = 0.0;
-      }
-      else{
-        displ_tol = average( aux_f );
-      }
-      
-      reduce(displ_tol, sumOp<scalar>());
-      displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
-      
-      if(itt%1000==0){
-        Info<<patch_.name()<<"  rlx iter "<<itt
-                <<"  factor "<<factor<<"  tolerance: "<<displ_tol<< nl;
-      }
-      
-      itt+=1;
-      
-      //if(itt%40000==0){
-      //  break;
-      //}
-    }
-    Info<< patch_.name() << "  converged in "<< itt 
-            << " iterations. Tolerance: " << displ_tol<< nl;
-    
-    vectorField dd = (boundaryPoints - patch_.localPoints());
-    scalarField cc(dd.size(), 1.0);
-    syncTools::syncPointList(mesh_, meshPoints, dd, plusEqOp<vector>(), vector::zero);
-    syncTools::syncPointList(mesh_, meshPoints, cc, plusEqOp<scalar>(), 0.0);
-    
-    forAll(dd, i){
-      dd[i] /= cc[i];
-    }
-    
-    return dd;
-  }
-  
-  template<class Patch>
-  vectorField wallRelaxation2(Patch& patch_, const vectorFieldList& weights, double rlxTol){
+  vectorField wallRelaxation(Patch& patch_, const vectorFieldList& weights){
     const List<face>& llf = patch_.localFaces();
     const labelList& meshPoints = patch_.meshPoints();
     const labelListList& plistFaces = patch_.pointFaces();
@@ -540,7 +434,6 @@ public:
       syncTools::syncPointList(mesh_, meshPoints, displacement, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, meshPoints, tol, plusEqOp<scalar>(), 0.0);
       
-      
       if(itt%q_norm_recalc==0){
         syncTools::syncPointList(mesh_, meshPoints, pointNorm, plusEqOp<vector>(), vector::zero);
         syncTools::syncPointList(mesh_, meshPoints, faceToPointSumWeights, plusEqOp<scalar>(), 0.0);
@@ -578,25 +471,29 @@ public:
       
       boundaryPoints += finalDisplacement;
       
+      
+      /*
       scalarField aux_f = mag(finalDisplacement/factor)/tol;
       scalarField aux_f0(finalDisplacement.size(), 0.0);
-      
       if( aux_f == aux_f0 ){
         displ_tol = 0.0;
       }
       else{
         displ_tol = average( aux_f );
       }
+      */
       
-      reduce(displ_tol, sumOp<scalar>());
-      displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
+      displ_tol = gAverage( mag(finalDisplacement/factor)/tol );
+      
+      //reduce(displ_tol, sumOp<scalar>());
+      //displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
       
       if(itt%1000==0){
         Info<<patch_.name()<<"  rlx iter "<<itt
-                <<"  factor "<<factor<<"  tolerance: "<<displ_tol<< nl;
+            <<"  factor "<<factor<<"  tolerance: "<<displ_tol<< nl;
       }
       
-      itt+=1;
+      itt++;
     }
     Info<< patch_.name() << "  converged in "<< itt 
             << " iterations. Tolerance: " << displ_tol<< nl;
@@ -616,7 +513,7 @@ public:
   
 
   template<class Patch>
-  vectorField wallRelaxationPointNeib(Patch& patch_, const scalarListList& weights, double rlxTol){
+  vectorField wallRelaxationOnPoints(Patch& patch_, const scalarListList& weights){
     const List<face>& llf = patch_.localFaces();
     const labelList& meshPoints = patch_.meshPoints();
     const labelListList& plistFaces = patch_.pointFaces();
@@ -798,7 +695,7 @@ public:
   }
   
   template<class Patch>
-  vectorField inletOutletRlx(Patch& patch_, double rlxTol, const vectorField &vvff){
+  vectorField inletOutletRlx(Patch& patch_, const vectorField &vvff){
     const labelList& meshPoints = patch_.meshPoints();
 
     const labelListList& ppp = patch_.pointEdges();
@@ -817,7 +714,7 @@ public:
       }
     }
     
-    pointField boundaryPoints = patch_.localPoints();
+    const pointField& boundaryPoints = patch_.localPoints();
     int N = boundaryPoints.size();
     
     vectorField displacement(N, vector::zero);
@@ -831,12 +728,12 @@ public:
     
     double displ_tol = 1.0;
     int itt = 0;
-    while(displ_tol>rlxTol){
-      
+    while(displ_tol>rlxTol)
+    {
       scalarList sumWeights( N, 0.0 );
       vectorField newDisplacement(N, vector::zero);
       forAll(newDisplacement, i){
-        point& curP = boundaryPoints[i];
+        const point& curP = boundaryPoints[i];
         
         const labelList& lll = ppp[i];
         labelList nl(lll.size(), -1);
@@ -855,7 +752,7 @@ public:
         forAll(nl, j){
           label pI = nl[j];
           vector d = displacement[pI];
-          point& np = boundaryPoints[pI];
+          const point& np = boundaryPoints[pI];
           
           vector wv = np - curP;
           scalar mag_wv = mag(wv);
@@ -885,6 +782,7 @@ public:
         }
       }
       
+      /*
       scalarField aux_f = mag(newDisplacement - displacement);
       scalarField aux_f0(displacement.size(), 0.0);
       
@@ -894,7 +792,11 @@ public:
       else{
         displ_tol = average( aux_f );
       }
+      */
       
+      displ_tol = gAverage( mag(newDisplacement - displacement) );
+      
+      /*
       scalarField aux_fn = mag(newDisplacement);
       scalarField aux_fn0(displacement.size(), 0.0);
       scalar displ_tol_norm;
@@ -904,17 +806,20 @@ public:
       else{
         displ_tol_norm = average( aux_fn );
       }
+      */
       
-      reduce(displ_tol, sumOp<scalar>());
-      reduce(displ_tol_norm, sumOp<scalar>());
-      if(displ_tol_norm!=0.0){
+      scalar displ_tol_norm = gAverage( mag(newDisplacement) );
+      
+      ///reduce(displ_tol, sumOp<scalar>());
+      //reduce(displ_tol_norm, sumOp<scalar>());
+      if(displ_tol_norm > SMALL){
         displ_tol /= displ_tol_norm;
       }
       else{
         displ_tol = 0.0;
       }
         
-        displacement = newDisplacement;
+      displacement = newDisplacement;
       
       if(itt%1000==0){
         Info<<patch_.name()<<"  rlx iter "<<itt
@@ -1125,10 +1030,6 @@ public:
       vectorField& pw = weights[i];
       pw.setSize(pFaces.size());
       
-      //if(pFaces.size()<2){
-      //  Info<<faceCs[pFaces[0]]<<"  "<<curP<<nl;
-      //}
-      
       vector sumw = vector::zero;
       forAll(pFaces, j){
         label faceI = pFaces[j];
@@ -1272,21 +1173,6 @@ public:
     return weights;
   }
 
-
-
-  
-  
-  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-  // set up pairs for concentration extrapollation on the edge
-  void setUpPairsConc();
-
-  // setup lists needed for mesh relaxation
-  void setUpLists();
-
-  
-  // set/get methods
-  float get_version();
 };
 
 #endif
