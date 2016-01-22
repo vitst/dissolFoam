@@ -220,8 +220,11 @@ public:
     scalarList faceToPointSumWeights( NN, 0.0 );
     while(displ_tol>rlxTol){
       if(itt%q_edge_norm_recalc==0){
-        pointNorm = *(new vectorField( NN, vector::zero ));
-        faceToPointSumWeights = *(new scalarList( NN, 0.0 ));
+        forAll(pointNorm, pni)
+        {
+          pointNorm[pni] = vector::zero;
+          faceToPointSumWeights[pni] = 0.0;
+        }
       }
       pointField faceCs = faceCentres(boundaryPoints, llf);
       vectorField faceNs = faceNormals(boundaryPoints, llf);
@@ -482,8 +485,11 @@ public:
     while(displ_tol>rlxTol)
     {
       if(itt%q_norm_recalc==0){
-        pointNorm = *(new vectorField( N, vector::zero ));
-        faceToPointSumWeights = *(new scalarList( N, 0.0 ));
+        forAll(pointNorm, pni)
+        {
+          pointNorm[pni] = vector::zero;
+          faceToPointSumWeights[pni] = 0.0;
+        }
       }
       // calculate current face centers
       pointField faceCs = faceCentres(boundaryPoints, llf);

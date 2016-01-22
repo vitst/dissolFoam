@@ -89,6 +89,13 @@ meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
   Foam::Time timeTmp(Foam::Time::controlDictName, args);
   Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args);
   timeTmp.setTime(timeDirs[0], 0);
+
+  // in case 0 time does not exist
+  if( timeTmp.timeName()!="0" ){
+    SeriousErrorIn("fieldOperations::getInletFlowRateT0")
+            <<"There is no 0 time dictionary. Check your decomposition as well!"
+            <<exit(FatalError);
+  }
   
   Foam::fvMesh meshTmp
   (
