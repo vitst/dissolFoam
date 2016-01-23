@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
   Info << "Setup field operation object" << endl;
   
   const scalar inletAreaT0 = fieldOp.getInletAreaT0();
-  Info << "Initial inlet area: " << inletAreaT0 << endl;
+  Info << "Initial inlet area: " << inletAreaT0 << nl;
   Info << "U field is scaled so that <U_inlet> = 1 at t=0" << nl;
   Info << "phi field is unscaled" << nl
        << "Used to recover scale factor after restart" << endl;
@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
 
     scalar Q  = fieldOp.getInletFlowRate(phi, constFlux);
     scalar nU = Q / inletAreaT0;
-    Info << "U and phi scale factor: " << nU << "   Q: "<< Q <<endl;
+    Info << "U and phi scale factor: " << nU << "   Q: "<< Q << endl;
 
     U   == U   / nU;
     phi == phi / nU;

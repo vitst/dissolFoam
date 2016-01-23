@@ -62,12 +62,12 @@ public:
   // public functions
   void meshUpdate(vectorField&, Time&);
 
-  float get_version() const;
+  word get_version() const;
   word get_date() const;
   
 private:
   // the version of meshRelax and date it was modified
-  const float version;
+  const word version;
   const word date;
   ////////////////////////////////////////////////////
   
@@ -349,7 +349,8 @@ private:
       displ_tol = gAverage( mag(projectedDisplacement/factor)/tol );
       
       if(itt%1000==0){
-        Info<<patchIO_.name()<<"  rlx iter "<<itt<<"  tolerance: "<<displ_tol<< endl;
+        Info << patchIO_.name() << "  rlx iter " << itt
+             << "  tolerance: " << displ_tol << endl;
       }
       
       itt+=1;
@@ -489,14 +490,14 @@ private:
       //displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
       
       if(itt%1000==0){
-        Info<<patch_.name()<<"  rlx iter "<<itt
-            <<"  factor "<<factor<<"  tolerance: "<<displ_tol<< nl;
+        Info << patch_.name() << "  rlx iter " << itt
+             << "  tolerance: " << displ_tol << endl;
       }
       
       itt++;
     }
-    Info<< patch_.name() << "  converged in "<< itt 
-            << " iterations. Tolerance: " << displ_tol<< nl;
+    Info << patch_.name() << "  converged in " << itt 
+         << " iterations. Tolerance: " << displ_tol<< endl;
     
     vectorField dd = (boundaryPoints - patch_.localPoints());
     scalarField cc(dd.size(), 1.0);
@@ -673,14 +674,17 @@ private:
       reduce(displ_tol, sumOp<scalar>());
       displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
       
-      if(itt%1000==0) Info<<patch_.name()<<"  rlx iter "<<itt <<"  factor "<<factor<<"  tolerance: "<<displ_tol<< nl;
+      if(itt%1000==0){
+        Info << patch_.name() << "  rlx iter " << itt
+             <<"  tolerance: "<< displ_tol << endl;
+      }
       
       itt+=1;
       
       if(itt%30000==0) break;
     }
-    Info<< patch_.name() << "  converged in "<< itt 
-            << " iterations. Tolerance: " << displ_tol<< nl;
+    Info << patch_.name() << "  converged in "<< itt 
+         << " iterations. Tolerance: " << displ_tol<< endl;
     
     vectorField dd = (boundaryPoints - patch_.localPoints());
     scalarField cc(dd.size(), 1.0);
@@ -822,8 +826,8 @@ private:
       displacement = newDisplacement;
       
       if(itt%1000==0){
-        Info<<patch_.name()<<"  rlx iter "<<itt
-                <<"  tolerance: "<<displ_tol<< nl;
+        Info << patch_.name() << "  rlx iter " << itt
+             << "  tolerance: " << displ_tol << endl;
       }
       itt+=1;
     }
@@ -835,8 +839,8 @@ private:
       }
     }
       
-    Info<< patch_.name() << "  converged in "<< itt 
-            << " iterations. Tolerance: " << displ_tol<< nl;
+    Info << patch_.name() << "  converged in "<< itt 
+         << " iterations. Tolerance: " << displ_tol<< endl;
     
     return displacement;
   }

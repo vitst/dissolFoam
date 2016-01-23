@@ -13,7 +13,7 @@
 // mesh1 is the mesh at time 0
 meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
 :
-  version(0.6),
+  version("0.6"),
   date("Oct 2015"),
   mesh_(mesh)
 {
@@ -105,24 +105,27 @@ meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
     wallWeights = calc_weights2( meshTmp, meshTmp.boundaryMesh()[wallID]);
   }
   
-  Info << "dissolFoamDict, dissolDebug:  " << dissolDebug << endl;
-  Info << "dissolFoamDict, fixInletConcentration:  " << fixInletWallEdgeDispl << endl;
-  Info << "dissolFoamDict, rlxTol:  " << rlxTol << endl;
-  Info << "dissolFoamDict, k_1:  " << k_1 << endl;
-  Info << "dissolFoamDict, k_2:  " << k_2 << endl;
-  Info << "dissolFoamDict, q_2:  " << q_2 << endl;
-  Info << "dissolFoamDict, k_1edge:  " << k_1edge << endl;
-  Info << "dissolFoamDict, k_2edge:  " << k_2edge << endl;
-  Info << "dissolFoamDict, q_2edge:  " << q_2edge << endl;
-  Info << "dissolFoamDict, q_edge_norm_recalc:  " << q_edge_norm_recalc << endl;
-  Info << "dissolFoamDict, q_norm_recalc:  " << q_norm_recalc << endl;
+  Info << "dissolFoamDict, dissolDebug:  " << dissolDebug << nl;
+  Info << "dissolFoamDict, fixInletConcentration:  " 
+       << fixInletWallEdgeDispl << nl;
+  Info << "dissolFoamDict, rlxTol:  " << rlxTol << nl;
+  Info << "dissolFoamDict, k_1:  " << k_1 << nl;
+  Info << "dissolFoamDict, k_2:  " << k_2 << nl;
+  Info << "dissolFoamDict, q_2:  " << q_2 << nl;
+  Info << "dissolFoamDict, q_norm_recalc:  " << q_norm_recalc << nl;
+  Info << "dissolFoamDict, k_1edge:  " << k_1edge << nl;
+  Info << "dissolFoamDict, k_2edge:  " << k_2edge << nl;
+  Info << "dissolFoamDict, q_2edge:  " << q_2edge << nl;
+  Info << "dissolFoamDict, q_edge_norm_recalc:  " 
+       << q_edge_norm_recalc << nl;
   
   if( variableGrading ){
-    Info << "dissolFoamDict, inigradingZ:  " << inigradingZ << endl;
-    Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ << endl;
-    Info << "dissolFoamDict, numberOfCellsZ:  " << Nz << endl;
+    Info << "dissolFoamDict, inigradingZ:  " << inigradingZ << nl;
+    Info << "dissolFoamDict, timeCoefZ:  " << timeCoefZ << nl;
+    Info << "dissolFoamDict, numberOfCellsZ:  " << Nz << nl;
   }
-  Info << "*****************************************************************" <<nl << endl;
+  Info << "************************************************************"
+       << nl << endl;
   
   inletWeights  = calc_edge_weights( meshTmp, mesh.boundaryMesh()[inletID] );
   outletWeights = calc_edge_weights( meshTmp, mesh.boundaryMesh()[outletID]);
@@ -134,13 +137,13 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
   );
   
   if(fixInletWallEdgeDispl){
-    Info << "Fix concentration on the edge between walls and inlet"<< nl;
+    Info << "Fix concentration on inlet-wall edge" << endl;
     fixIWEdgeDispl(pointDispWall);
   }
   
 //  Mesh update 2: boundary mesh relaxation
   if( variableGrading ){
-    Info<<nl<<"Calculating new Z grading...."<< endl;
+    Info << nl << "Calculating new Z grading...." << endl;
     scalar Gz = inigradingZ / (timeCoefZ * time.value() + 1.0);
     scalar lambdaZ = 1/static_cast<double>(Nz-1) * std::log( Gz );
     wallWeights = calc_weights( mesh_.boundaryMesh()[wallID], lambdaZ);
@@ -167,21 +170,25 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
   }
 
 // Relaxing edges. 1D
-  Info<<"Relaxing the inlet-wall edge..."<< endl;
+  Info << "Relaxing inlet-wall edge..." << endl;
   vectorField wiEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[inletID], inletWeights);
   pointField mpWIE = doWallDisplacement( wiEdgeRlx );
   mesh_.movePoints( mpWIE );
 
-  Info<<"Relaxing the outlet-wall edge..."<< endl;
+  Info << "Relaxing outlet-wall edge..." << endl;
   vectorField woEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[outletID], outletWeights);
   pointField mpWOE = doWallDisplacement( woEdgeRlx );
   mesh_.movePoints( mpWOE );
+  Info << "Edge relaxation cpuTime: "
+       << time.cpuTimeIncrement() << " s" << endl;
 
-// *********************************************************************************
+// *********************************************************************
 // Relaxing surfaces. 2D
-  Info<<"Relaxing the wall... time: "<< time.cpuTimeIncrement() << endl;
+
+  Info << "Relaxing the wall..." << endl;
   vectorField wallRelax = wallRelaxation(mesh_.boundaryMesh()[wallID], wallWeights);
-  Info << "Wall relaxation time: " << time.cpuTimeIncrement() << " s" << endl;
+  Info << "Wall relaxation cpuTime: "
+       << time.cpuTimeIncrement() << " s" << endl;
 
   mesh_.movePoints( savedPointsAll );
 
@@ -192,11 +199,12 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
 
   Info << "Relaxing inlet..." << endl;
   vectorField inlRelax = inletOutletRlx( mesh_.boundaryMesh()[inletID], vvff);
-  Info << "Inlet relaxation time: " << time.cpuTimeIncrement() << " s" << endl;
 
   Info << "Relaxing outlet..." << endl;
   vectorField outRelax = inletOutletRlx( mesh_.boundaryMesh()[outletID], vvff);
-  Info << "Outlet relaxation time: " << time.cpuTimeIncrement() << " s" << endl;
+
+  Info << "Inlet/Outlet relaxation cpuTime: "
+       << time.cpuTimeIncrement() << " s" << endl;
   
   
   //mesh_.movePoints( savedPointsAll );
@@ -418,7 +426,8 @@ vectorField meshRelax::calculateInletDisplacement(vectorField& wallDispl){
     }
     
     if(itt%100==0){
-      Info<<"  Wall-inlet iter "<<itt<<"  tolerance: "<<tol<< nl;
+      Info << "Wall-inlet  iter " << itt 
+           << "  tolerance: "<< tol << endl;
     }
 
     itt+=1;
@@ -511,7 +520,8 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
     }
     
     if(itt%100==0){
-      Info<<"  Wall-outlet iter "<<itt<<"  tolerance: "<<tol<< nl;
+      Info << "Wall-outlet iter " << itt 
+           << "  tolerance: "<< tol << endl;
     }
 
     itt+=1;
@@ -739,7 +749,7 @@ void meshRelax::setUpLists()
   
 }
 
-float meshRelax::get_version() const{
+word meshRelax::get_version() const{
   return version;
 }
 word meshRelax::get_date() const{
