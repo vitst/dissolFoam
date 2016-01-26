@@ -332,20 +332,6 @@ private:
         boundaryPoints[ind] += projectedDisplacement[i];
       }
       
-      /*
-      scalarField aux_f = mag(projectedDisplacement)/tol;
-      if( aux_f == aux_f0 ){
-        displ_tol = 0.0;
-      }
-      else{
-        displ_tol = average( aux_f );
-      }
-
-      reduce(displ_tol, sumOp<scalar>());
-      displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
-      */
-      
-      //displ_tol = gAverage( mag(projectedDisplacement/factor)/tol );
       displ_tol = gAverage( mag(projectedDisplacement/factor)/tol );
       
       if(itt%1000==0){
@@ -472,22 +458,7 @@ private:
       
       boundaryPoints += finalDisplacement;
       
-      
-      /*
-      scalarField aux_f = mag(finalDisplacement/factor)/tol;
-      scalarField aux_f0(finalDisplacement.size(), 0.0);
-      if( aux_f == aux_f0 ){
-        displ_tol = 0.0;
-      }
-      else{
-        displ_tol = average( aux_f );
-      }
-      */
-      
       displ_tol = gAverage( mag(finalDisplacement/factor)/tol );
-      
-      //reduce(displ_tol, sumOp<scalar>());
-      //displ_tol = displ_tol / static_cast<double>( Pstream::nProcs() );
       
       if(itt%1000==0){
         Info << patch_.name() << "  rlx iter " << itt
@@ -511,8 +482,6 @@ private:
     return dd;
   }
   
-  
-
   template<class Patch>
   vectorField wallRelaxationOnPoints(Patch& patch_, const scalarListList& weights){
     const List<face>& llf = patch_.localFaces();
@@ -786,36 +755,10 @@ private:
         }
       }
       
-      /*
-      scalarField aux_f = mag(newDisplacement - displacement);
-      scalarField aux_f0(displacement.size(), 0.0);
-      
-      if( aux_f == aux_f0 ){
-        displ_tol = 0.0;
-      }
-      else{
-        displ_tol = average( aux_f );
-      }
-      */
-      
       displ_tol = gAverage( mag(newDisplacement - displacement) );
-      
-      /*
-      scalarField aux_fn = mag(newDisplacement);
-      scalarField aux_fn0(displacement.size(), 0.0);
-      scalar displ_tol_norm;
-      if( aux_fn == aux_fn0 ){
-        displ_tol_norm = 0.0;
-      }
-      else{
-        displ_tol_norm = average( aux_fn );
-      }
-      */
       
       scalar displ_tol_norm = gAverage( mag(newDisplacement) );
       
-      ///reduce(displ_tol, sumOp<scalar>());
-      //reduce(displ_tol_norm, sumOp<scalar>());
       if(displ_tol_norm > SMALL){
         displ_tol /= displ_tol_norm;
       }

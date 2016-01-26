@@ -22,11 +22,6 @@ meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
   inletID  = mesh_.boundaryMesh().findPatchID("inlet");
   outletID = mesh_.boundaryMesh().findPatchID("outlet");
 
-  // map vetex ID: patch to global
-  //wallsToAll  = mesh_.boundaryMesh()[wallID].meshPoints();
-  //inletToAll  = mesh_.boundaryMesh()[inletID].meshPoints();
-  //outletToAll = mesh_.boundaryMesh()[outletID].meshPoints();
-
   setUpLists();
   setUpPairsConc();
   
@@ -247,9 +242,8 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
 
 
 vectorField meshRelax::normalsOnTheEdge(){
-
   const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();
-  pointField boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();
+  const pointField& boundaryPoints = mesh_.boundaryMesh()[wallID].localPoints();
   label NN = local_wall_WallsInletEdges.size();
 
   const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
@@ -260,10 +254,9 @@ vectorField meshRelax::normalsOnTheEdge(){
   vectorField pointNorm( NN, vector::zero );
   scalarList faceToPointSumWeights( NN, 0.0 );
   
-
   forAll(local_wall_WallsInletEdges, i){
-    label  curI = local_wall_WallsInletEdges[i];
-    point& curP = boundaryPoints[curI];
+    label&  curI = local_wall_WallsInletEdges[i];
+    const point& curP = boundaryPoints[curI];
         
     const labelList& pFaces = plistFaces[curI];
     forAll(pFaces, j){
@@ -362,7 +355,6 @@ vectorField meshRelax::calculateInletDisplacement(vectorField& wallDispl){
   pointField curWallBP1 = wallBP + deltaT*wallDispl;
 
   // new faceCentres and faceNormals
-  //pointField faceCs = faceCentres(curWallBP, llf);
   vectorField faceNs = faceNormals(curWallBP1, llf);
   coupledPatchInterpolation patchInterpolator( mesh_.boundaryMesh()[wallID], mesh_ );
   vectorField pointNs = patchInterpolator.faceToPointInterpolate(faceNs);
@@ -378,9 +370,7 @@ vectorField meshRelax::calculateInletDisplacement(vectorField& wallDispl){
     edgeNorms[i] = pointNs[pointI];
     edgeNorms[i]/=mag(edgeNorms[i]);
   }
-  scalar maxZ = max( edgePoints.component(vector::Z) );
-  reduce(maxZ, maxOp<scalar>());
-  
+  scalar maxZ = gMax( edgePoints.component(vector::Z) );
   // *************************************************************************************
 
   pointField inP = mesh_.boundaryMesh()[inletID].localPoints();
@@ -396,29 +386,28 @@ vectorField meshRelax::calculateInletDisplacement(vectorField& wallDispl){
   // *************************************************************************************
   vectorField displacement(N, vector::zero);
   
-  //const pointField& boundaryPoints = mesh_.boundaryMesh()[inletID].localPoints();
-  scalar tol = 1.0;
-  scalar tolerance = 0.00000000001;
+  scalar displ_tol = 1.0;
   int itt = 0;
-  while( tol>tolerance ){
+  while( displ_tol>rlxTol ){
     forAll(local_wall_WallsInletEdges, i){
       displacement[i].z() = (maxZ - edgePoints[i].z());
     }
     vectorField proj_disp = transform(I - edgeNorms*edgeNorms, displacement);
     
-    scalarField aux_f = mag(proj_disp);
-    scalarField aux_f0(N, 0.0);
-
-    if( aux_f == aux_f0 ){
-      tol = 0.0;
+    //displ_tol = gAverage( mag(proj_disp) );
+    displ_tol = gAverage( mag(proj_disp - displacement) );
+    
+    scalar displ_tol_norm = gAverage( mag(proj_disp) );
+      
+    if(displ_tol_norm > SMALL){
+      displ_tol /= displ_tol_norm;
     }
     else{
-      tol = average( aux_f );
+      displ_tol = 0.0;
     }
-    reduce(tol, sumOp<scalar>());
-    tol /= static_cast<double>( Pstream::nProcs() );
     
-    if(tol>tolerance){
+    // it should increase precision, points should end up on the surface
+    if(displ_tol>rlxTol){
       edgePoints += proj_disp;
     }
     else{
@@ -427,7 +416,7 @@ vectorField meshRelax::calculateInletDisplacement(vectorField& wallDispl){
     
     if(itt%100==0){
       Info << "Wall-inlet  iter " << itt 
-           << "  tolerance: "<< tol << endl;
+           << "  tolerance: "<< displ_tol << endl;
     }
 
     itt+=1;
@@ -444,7 +433,6 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
   // currnt wall points
   const pointField& wallBP = mesh_.boundaryMesh()[wallID].localPoints();
   // list of neighbor faces
-  //const labelListList& plistFaces = mesh_.boundaryMesh()[wallID].pointFaces();
   // list of faces
   const List<face>& llf = mesh_.boundaryMesh()[wallID].localFaces();
   // new points coordinates
@@ -452,7 +440,6 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
   
   pointField curWallBP1 = wallBP + deltaT*wallDispl;
 
-  //pointField faceCs = faceCentres(curWallBP, llf);
   vectorField faceNs = faceNormals(curWallBP1, llf);
   coupledPatchInterpolation patchInterpolator( mesh_.boundaryMesh()[wallID], mesh_ );
   vectorField pointNs = patchInterpolator.faceToPointInterpolate(faceNs);
@@ -465,16 +452,14 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
   forAll(local_wall_WallsOutletEdges, i){
     label pointI = local_wall_WallsOutletEdges[i];
     edgePoints[i] = curWallBP[pointI];
-    edgeNorms[i] = pointNs[pointI];
-    edgeNorms[i]/=mag(edgeNorms[i]);
+    edgeNorms[i]  = pointNs[pointI] / mag( pointNs[pointI] );
   }
 
-  scalar minZ = min( edgePoints.component(vector::Z) );
-  reduce(minZ, minOp<scalar>());
+  scalar minZ = gMin( edgePoints.component(vector::Z) );
   
   // ***************************************************************************
   
-  pointField outP = mesh_.boundaryMesh()[outletID].localPoints();
+  const pointField& outP = mesh_.boundaryMesh()[outletID].localPoints();
   
   vectorField pointDispOutlet( outP.size(), vector::zero );
   forAll(outP,i){
@@ -486,33 +471,29 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
   }
   
   // ***************************************************************************
-
   // new faceCentres and faceNormals
-  
   vectorField displacement(N, vector::zero);
+  vectorField oldDisplacement(N, vector::zero);
   
-  scalar tol = 1.0;
-  scalar tolerance = 0.0000000001;
+  scalar displ_tol = 1.0;
   int itt = 0;
-  while( tol>tolerance ){
+  while( displ_tol>rlxTol ){
     forAll(local_wall_WallsOutletEdges, i){
       displacement[i].z() = minZ - edgePoints[i].z();
     }
     vectorField proj_disp = transform(I - edgeNorms*edgeNorms, displacement);
     
-    scalarField aux_f = mag(proj_disp);
-    scalarField aux_f0(N, 0.0);
-
-    if( aux_f == aux_f0 ){
-      tol = 0.0;
+    displ_tol = gAverage( mag(proj_disp - displacement) );
+    scalar displ_tol_norm = gAverage( mag(proj_disp) );
+      
+    if(displ_tol_norm > SMALL){
+      displ_tol /= displ_tol_norm;
     }
     else{
-      tol = average( aux_f );
+      displ_tol = 0.0;
     }
-    reduce(tol, sumOp<scalar>());
-    tol /= static_cast<double>( Pstream::nProcs() );
     
-    if(tol>tolerance){
+    if( displ_tol>rlxTol ){
       edgePoints += proj_disp;
     }
     else{
@@ -521,7 +502,7 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
     
     if(itt%100==0){
       Info << "Wall-outlet iter " << itt 
-           << "  tolerance: "<< tol << endl;
+           << "  tolerance: "<< displ_tol << endl;
     }
 
     itt+=1;
@@ -536,22 +517,22 @@ vectorField meshRelax::calculateOutletDisplacement(vectorField& wallDispl){
 }
 
 
-pointField meshRelax::doInletDisplacement(const vectorField& inletDispl){
-  pointField newPoints = mesh_.points();
-  const labelList& inletToAll = mesh_.boundaryMesh()[inletID].meshPoints();
-  forAll(inletDispl, i){
-    label indx = inletToAll[i];
-    newPoints[indx] += inletDispl[i];
-  }
-  return newPoints;
-}
-
 pointField meshRelax::doWallDisplacement(const vectorField& wallDispl){
   pointField newPoints = mesh_.points();
   const labelList& wallsToAll  = mesh_.boundaryMesh()[wallID].meshPoints();
   forAll(wallDispl, i){
     label indx = wallsToAll[i];
     newPoints[indx] += wallDispl[i];
+  }
+  return newPoints;
+}
+
+pointField meshRelax::doInletDisplacement(const vectorField& inletDispl){
+  pointField newPoints = mesh_.points();
+  const labelList& inletToAll = mesh_.boundaryMesh()[inletID].meshPoints();
+  forAll(inletDispl, i){
+    label indx = inletToAll[i];
+    newPoints[indx] += inletDispl[i];
   }
   return newPoints;
 }

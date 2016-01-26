@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
 
     scalar Q  = fieldOp.getInletFlowRate(phi, constFlux);
     scalar nU = Q / inletAreaT0;
-    Info << "U and phi scale factor: " << nU << "   Q: "<< Q << endl;
+    Info << "U and phi scale factor: " << nU << "   Q: "<< Q << nl << endl;
 
     U   == U   / nU;
     phi == phi / nU;
