@@ -155,6 +155,12 @@ private:
   
   vectorField normalsOnTheEdge();
   
+  // common points on label lists, result is two lists of local (for list1) and global labels
+  void commonPoints(const labelList& list1, const labelList& list2, 
+                    labelList& localList, labelList& globalList);
+
+  void neighborListEdge(const labelList& list, const edgeList& eList, 
+                        const labelListList& pointEdgesLi, labelListList& neLi);
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
   // set up pairs for concentration extrapollation on the edge
@@ -163,75 +169,39 @@ private:
   // setup lists needed for mesh relaxation
   void setUpLists();
 
-  
-  
-  
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   
   template<class Patch>
-  vectorField edgeRelaxation(Patch& patchIO_, const scalarFieldList& wv){
-    
+  vectorField edgeRelaxation(Patch& patchIO_, const scalarFieldList& wv)
+  {
     Patch& wall_patch = mesh_.boundaryMesh()[wallID];
     const List<face>& llf = wall_patch.localFaces();
     const labelListList& plistFaces = wall_patch.pointFaces();
 
     pointField boundaryPoints = wall_patch.localPoints();
-    int N = boundaryPoints.size();
     
-    const labelListList& ppp = wall_patch.pointEdges();
+    const labelListList& pointEdgesLi = wall_patch.pointEdges();
     const edgeList& ee = wall_patch.edges();
-    
-    vectorField globalDisplacement(N, vector::zero);
     
     const labelList& meshPoints = patchIO_.meshPoints();
     const labelList& wallsTo  = wall_patch.meshPoints();
-    labelList local_wall_WallEdges;
-    labelList global_WallEdges;
-    forAll(wallsTo, i){
-      label lW = wallsTo[i];
-
-      label inlind = findIndex(meshPoints, lW);
-      if( inlind != -1){
-        local_wall_WallEdges.append( i );
-        global_WallEdges.append( lW );
-      }
-    }
+    labelList local_wall_WallEdges, global_WallEdges;
+    commonPoints(wallsTo, meshPoints, local_wall_WallEdges, global_WallEdges);
     
     // relax edges
     label NN = local_wall_WallEdges.size();
-    label globalNN = NN;
-    reduce(globalNN, sumOp<label>());
+    //label globalNN = NN;
+    //reduce(globalNN, sumOp<label>());
     
     labelListList nepe;
-    forAll(local_wall_WallEdges, i){
-      label ind = local_wall_WallEdges[i];
-
-      const labelList& lll = ppp[ind];
-      labelList nel;
-      forAll(lll, ii){
-        const edge& ed = ee[ lll[ii] ];
-        label edb = ed.start();
-        
-        if( edb!=ind && findIndex(local_wall_WallEdges, edb) != -1 ){
-          nel.append(edb);
-        }
-        
-        label ede = ed.end();
-        if( ede!=ind && findIndex(local_wall_WallEdges, ede) != -1){
-          nel.append(ede);
-        }
-      }
-      nepe.append(nel);
-    }
+    neighborListEdge(local_wall_WallEdges, ee, pointEdgesLi, nepe);
     
     double displ_tol = 1.0;
     int itt = 0;
-    vector nCyc(1.0,0.0,0.0);
-    vector nZ(0.0,0.0,1.0);
-    //scalarField aux_f0(NN, 0.0);
-    
     vectorField pointNorm( NN, vector::zero );
     scalarList faceToPointSumWeights( NN, 0.0 );
-    while(displ_tol>rlxTol){
+    while(displ_tol>rlxTol)
+    {
       if(itt%q_edge_norm_recalc==0){
         forAll(pointNorm, pni)
         {
@@ -239,6 +209,7 @@ private:
           faceToPointSumWeights[pni] = 0.0;
         }
       }
+      
       pointField faceCs = faceCentres(boundaryPoints, llf);
       vectorField faceNs = faceNormals(boundaryPoints, llf);
       
@@ -260,18 +231,10 @@ private:
 
           scalar mag_d = mag(d2);
           
-          vector disp;
-          //disp.x() = d2.x() * curwv[ii].x(); // * nw; // TODO it is for the weighted 
-          //disp.y() = 0.0;//d2.y() * curwv[ii].y(); // * nw;
-          //disp.z() = 0.0;
-          
-          disp = curwv[ii] * d2;
-          
-          displacement[i] += disp;
+          displacement[i] += curwv[ii] * d2;
           tol[i] += mag_d;
           sumWeights[i] += 1;
         }
-
         
         // stick to cyclic boundary
         if( findIndex(local_wall_WallsCycEdges1, curI) != -1 ||
@@ -279,102 +242,35 @@ private:
           displacement[i].x() = 0.0;
         }
         
-        
         if(itt%q_edge_norm_recalc==0){
-          
           const labelList& pFaces = plistFaces[curI];
           forAll(pFaces, j){
-            
             label ind = pNeib[j];
             point& neibP = boundaryPoints[ind];
-            vector d2 = neibP - curP;
+            vector d2 = neibP - curP;     // vector from the current point to its neighbor
             
-            point mid = curP + d2/2.0;
-            scalar halfD = mag(d2)/2.0;
+            label faceI = pFaces[j]; 
+            vector fnn = faceNs[ faceI ]; // face normal
+            fnn.z() = 0.0;                // projection to the inlet surface ~ & (0,0,1)
             
-            //vector nnn = d2 ^ nZ;
+            // correction of the normal, otherwise realN = fnn
+            scalar middi = mag(d2)/2.0;   // half distance to neighbor
+            point midpo = curP + d2/2.0;  // midpoint
+            plane pll(midpo, d2);           // plane perpendicular to the edge via midpoint
+            point endNorm = midpo + fnn;  // end of the face normal projected on the inlet
+            point projp = pll.nearestPoint(endNorm); // projection of endNorm onto pll plane
             
-            point midpo = mid;
-            scalar middi = halfD;
-            //plane pll(mid, nnn);
-            //Pout<< curI << " lenN  "<< mag(d2) <<endl;
+            vector realN = projp - midpo; // normal to the edge between current point
+                                          // and its neighbor in the inlet plane facing
+                                          // outside the fracture (mag(realN)!=1 !!!)
             
-            plane pll(mid, d2);
-            
-            //Pout<< "p1: "<< curP<< "  p2:  "<< neibP<< "   mid: "<< midpo<<endl;
-            
-            
-            label faceI = pFaces[j];
-            //point& faceC = faceCs[faceI];
-            //vector d = faceC - curP;
-            //scalar mag_d = mag(d);
-
-            vector fnn = faceNs[ faceI ];
-            fnn.z() = 0.0;
-            
-            point endNorm = midpo + fnn;
-            
-            point projp = pll.nearestPoint(endNorm);
-            
-            //Info<< "endNorm: "<< endNorm<< "   projp: "<< projp<<endl;
-            
-            vector realN = projp - midpo;
-            
-            //Pout<<ind<<"  nnn  "<< (realN & d2) 
-            //        << " realN: " << realN 
-            //        << " faceN: " << faceNs[ faceI ] <<endl;
-            
-            // this is for normal
-            //scalar nw = 1.0 / mag_d;
-            //pointNorm[i] += nw * faceNs[ faceI ];
             scalar nw = 1.0 / middi;
             pointNorm[i] += nw * realN;
             pointNorm[i].z()=0;
             faceToPointSumWeights[i] += nw;
           }
-          
-          /*
-          const labelList& pFaces = plistFaces[curI];
-          forAll(pFaces, j){
-            label faceI = pFaces[j];
-            point& faceC = faceCs[faceI];
-            vector d = faceC - curP;
-            scalar mag_d = mag(d);
-
-            // this is for normal
-            scalar nw = 1.0 / mag_d;
-            pointNorm[i] += nw * faceNs[ faceI ];
-            pointNorm[i].z()=0;
-            faceToPointSumWeights[i] += nw;
-          }
-          */
-          
-          /*
-          forAll(pNeib, ii){
-            label ind = pNeib[ii];
-            point& neibP = boundaryPoints[ind];
-            vector d2 = neibP - curP;
-            
-            scalar halfD = mag(d2)/2.0;
-            scalar nw = 1.0 / halfD;
-            
-            vector nnn = d2 ^ nZ;
-            //scalar nnn = d2 & pointNorm[i];
-            //Pout<<ind<<"  nnn  "<<nnn<<endl;
-            nnn /= mag(nnn);
-            
-          
-            pointNorm[i] += nw * nnn;
-            pointNorm[i].z()=0;
-            faceToPointSumWeights[i] += nw;
-          }
-          */
         }
       }
-      
-      //Pout<< " pointNorm "<<pointNorm<<endl;
-      //Info<<itt<<"   here"<<endl<<endl<<endl;
-      //std::exit(0);
       
       syncTools::syncPointList(mesh_, global_WallEdges, displacement, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, global_WallEdges, tol, plusEqOp<scalar>(), 0.0);
@@ -389,15 +285,13 @@ private:
           pointNorm[i] /= mag( pointNorm[i] );
         }
       }
-      //Pout<< " pointNorm "<<mag(pointNorm)<<endl;
-      //std::exit(0);
-      
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
       scalar factor = (itt%q_2edge==0) ? k_2edge : k_1edge;
       projectedDisplacement*=factor;
       
+      // stick to cyclic boundary
       forAll(local_wall_WallsCycEdges1, i){
         label ind = local_wall_WallsCycEdges1[i];
         label loc_ind = findIndex(local_wall_WallEdges, ind);
@@ -416,9 +310,7 @@ private:
       forAll(local_wall_WallEdges, i){
         label ind = local_wall_WallEdges[i];
         boundaryPoints[ind] += projectedDisplacement[i];
-        //Info<< projectedDisplacement[i].component(vector::X)<<endl;
       }
-      
       
       displ_tol = gAverage( mag(projectedDisplacement)/tol );
       
@@ -426,18 +318,11 @@ private:
         Info << patchIO_.name() << "  rlx iter " << itt
              << "  tolerance: " << displ_tol << endl;
       }
-      //if(itt%1000==0){
-      //  break;
-      //}
       
-      itt+=1;
+      itt++;
     }
     
-    forAll(globalDisplacement, i){
-      globalDisplacement[i] = boundaryPoints[i]-wall_patch.localPoints()[i];
-    }
-    
-    return globalDisplacement;
+    return (boundaryPoints-wall_patch.localPoints());
   }
 
   template<class Patch>
@@ -574,7 +459,8 @@ private:
   }
   
   template<class Patch>
-  vectorField wallRelaxationOnPoints(Patch& patch_, const scalarListList& weights){
+  vectorField wallRelaxationOnPoints(Patch& patch_, const scalarListList& weights)
+  {
     const List<face>& llf = patch_.localFaces();
     const labelList& meshPoints = patch_.meshPoints();
     const labelListList& plistFaces = patch_.pointFaces();
@@ -759,24 +645,16 @@ private:
   }
   
   template<class Patch>
-  vectorField inletOutletRlx(Patch& patch_, const vectorField &vvff){
+  vectorField inletOutletRlx(Patch& patch_, const vectorField &vvff)
+  {
     const labelList& meshPoints = patch_.meshPoints();
 
     const labelListList& ppp = patch_.pointEdges();
     const edgeList& ee = patch_.edges();
     
     const labelList& wallsTo  = mesh_.boundaryMesh()[wallID].meshPoints();
-    labelList local_wall_WallEdges;
-    labelList global_WallEdges;
-    forAll(wallsTo, i){
-      label lW = wallsTo[i];
-
-      label inlind = findIndex(meshPoints, lW);
-      if( inlind != -1){
-        local_wall_WallEdges.append( i );
-        global_WallEdges.append( lW );
-      }
-    }
+    labelList local_wall_WallEdges, global_WallEdges;
+    commonPoints(wallsTo, meshPoints, local_wall_WallEdges, global_WallEdges);
     
     const pointField& boundaryPoints = patch_.localPoints();
     int N = boundaryPoints.size();
@@ -1119,46 +997,18 @@ private:
   {
     const Patch& patch_ = meshTmp.boundaryMesh()[wallID];
     pointField boundaryPoints = patch_.localPoints();
-    const labelListList& ppp = patch_.pointEdges();
-    const edgeList& ee = patch_.edges();
+    
     const labelList& wallsTo  = patch_.meshPoints();
-    
     const labelList& meshPoints = patchIO_.meshPoints();
+    labelList local_wall_WallEdges, global_WallEdges;
+    commonPoints(wallsTo, meshPoints, local_wall_WallEdges, global_WallEdges);
     
-    labelList local_wall_WallEdges;
-    labelList global_WallEdges;
-    forAll(wallsTo, i){
-      label lW = wallsTo[i];
-      label inlind = findIndex(meshPoints, lW);
-      if( inlind != -1){
-        local_wall_WallEdges.append( i );
-        global_WallEdges.append( lW );
-      }
-    }
+    const labelListList& pointEdgesLi = patch_.pointEdges();
+    const edgeList& ee = patch_.edges();
+    labelListList nepe;
+    neighborListEdge(local_wall_WallEdges, ee, pointEdgesLi, nepe);
     
     label NN = local_wall_WallEdges.size();
-    labelListList nepe;
-    forAll(local_wall_WallEdges, i){
-      label ind = local_wall_WallEdges[i];
-
-      const labelList& lll = ppp[ind];
-      labelList nel;
-      forAll(lll, ii){
-        const edge& ed = ee[ lll[ii] ];
-        label edb = ed.start();
-        
-        if( edb!=ind && findIndex(local_wall_WallEdges, edb) != -1 ){
-          nel.append(edb);
-        }
-        
-        label ede = ed.end();
-        if( ede!=ind && findIndex(local_wall_WallEdges, ede) != -1){
-          nel.append(ede);
-        }
-      }
-      nepe.append(nel);
-    }
-    
     scalarFieldList weights( NN );
     scalarField sumWeights( NN, 0.0 );
 

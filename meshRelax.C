@@ -686,11 +686,64 @@ void meshRelax::setUpPairsConc(){
   
 }
 
+void meshRelax::commonPoints
+(
+  const labelList& list1, 
+  const labelList& list2, 
+  labelList& localList,
+  labelList& globalList
+)
+{
+  forAll(list1, loclLabel1){
+    label globLabel1 = list1[loclLabel1];
+    label loclLabel2 = findIndex(list2, globLabel1);
+    if( loclLabel2 != -1){
+      localList.append( loclLabel1 );
+      globalList.append( globLabel1 );
+    }
+  }
+}
+
+void meshRelax::neighborListEdge
+(
+  const labelList& list,
+  const edgeList& eList,
+  const labelListList& pointEdgesLi,
+  labelListList& neLi
+)
+{
+  forAll(list, i){
+    label ind = list[i];
+
+    const labelList& lll = pointEdgesLi[ind];
+    labelList nel;
+    forAll(lll, ii){
+      const edge& ed = eList[ lll[ii] ];
+      label edb = ed.start();
+
+      if( edb!=ind && findIndex(list, edb) != -1 ){
+        nel.append(edb);
+      }
+
+      label ede = ed.end();
+      if( ede!=ind && findIndex(list, ede) != -1){
+        nel.append(ede);
+      }
+    }
+    neLi.append(nel);
+  }
+}
+
+
+
 void meshRelax::setUpLists()
 {
   const labelList& wallsToAll  = mesh_.boundaryMesh()[wallID].meshPoints();
   const labelList& inletToAll  = mesh_.boundaryMesh()[inletID].meshPoints();
   const labelList& outletToAll = mesh_.boundaryMesh()[outletID].meshPoints();
+  
+  //commonPoints(wallsToAll, inletToAll, local_inlet_WallsInletEdges, global_WallEdges);
+  
   
   forAll(wallsToAll, i){
     label lW = wallsToAll[i];
