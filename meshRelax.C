@@ -81,7 +81,7 @@ meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
   // in case 0 time does not exist
   if( timeTmp.timeName()!="0" ){
     SeriousErrorIn("fieldOperations::getInletFlowRateT0")
-            <<"There is no 0 time dictionary. Check your decomposition as well!"
+            <<"There is no 0 time directory. Check your decomposition as well!"
             <<exit(FatalError);
   }
   
@@ -122,8 +122,8 @@ meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
   Info << "************************************************************"
        << nl << endl;
   
-  inletWeights  = calc_edge_weights( meshTmp, mesh.boundaryMesh()[inletID] );
-  outletWeights = calc_edge_weights( meshTmp, mesh.boundaryMesh()[outletID]);
+  inletWeights  = calc_edge_weights( meshTmp, meshTmp.boundaryMesh()[inletID] );
+  outletWeights = calc_edge_weights( meshTmp, meshTmp.boundaryMesh()[outletID]);
 }
 
 void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
@@ -149,7 +149,6 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
   vectorField pointDispOutlet = calculateOutletDisplacement(pointDispWall);
 
 //  Mesh update 3: boundary mesh relaxation
-
   pointField mpW = doWallDisplacement( pointDispWall * deltaT );
   mesh_.movePoints( mpW);
 
@@ -177,6 +176,10 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
   Info << "Edge relaxation cpuTime: "
        << time.cpuTimeIncrement() << " s" << endl;
 
+  if(dissolDebug){
+    time.write();
+    time++;
+  }
 // *********************************************************************
 // Relaxing surfaces. 2D
 

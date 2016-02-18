@@ -56,7 +56,7 @@ scalar fieldOperations::getInletFlowRateT0(const surfaceScalarField& phi)
     // in case 0 time does not exist
     if( timeTmp.timeName()!="0" ){
       SeriousErrorIn("fieldOperations::getInletFlowRateT0")
-              <<"There is no 0 time dictionary. Check your decomposition as well!"
+              <<"There is no 0 time directory. Check your decomposition as well!"
               <<exit(FatalError);
     }
   
@@ -109,7 +109,7 @@ scalar fieldOperations::getInletAreaT0(){
   
   if( timeTmp.timeName()!="0" ){
     SeriousErrorIn("fieldOperations::getInletAreaT0")
-            <<"There is no 0 time dictionary. Check your decomposition as well!"
+            <<"There is no 0 time directory. Check your decomposition as well!"
             <<exit(FatalError);
   }
   

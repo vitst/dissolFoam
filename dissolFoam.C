@@ -114,7 +114,6 @@ int main(int argc, char *argv[])
   Info << "U field is scaled so that <U_inlet> = 1 at t=0" << nl;
   Info << "phi field is unscaled" << nl
        << "Used to recover scale factor after restart" << endl;
-
   
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
 

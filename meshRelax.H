@@ -50,6 +50,7 @@ Contributors/Copyright:
 #include "meshSearch.H"
 
 typedef List<vectorField> vectorFieldList;
+typedef List<scalarField> scalarFieldList;
 
 class meshRelax
 {
@@ -117,8 +118,8 @@ private:
   labelListList inletTriple;
   
   vectorFieldList wallWeights;
-  vectorFieldList inletWeights;
-  vectorFieldList outletWeights;
+  scalarFieldList inletWeights;
+  scalarFieldList outletWeights;
   
   ///////////////////////////////////////////////////////////////////////////
   // private functions
@@ -167,7 +168,7 @@ private:
   
   
   template<class Patch>
-  vectorField edgeRelaxation(Patch& patchIO_, vectorFieldList& wv){
+  vectorField edgeRelaxation(Patch& patchIO_, const scalarFieldList& wv){
     
     Patch& wall_patch = mesh_.boundaryMesh()[wallID];
     const List<face>& llf = wall_patch.localFaces();
@@ -225,6 +226,7 @@ private:
     double displ_tol = 1.0;
     int itt = 0;
     vector nCyc(1.0,0.0,0.0);
+    vector nZ(0.0,0.0,1.0);
     //scalarField aux_f0(NN, 0.0);
     
     vectorField pointNorm( NN, vector::zero );
@@ -249,7 +251,7 @@ private:
         point& curP = boundaryPoints[curI];
         const labelList& pNeib = nepe[i];
         
-        vectorField& curwv = wv[i];
+        const scalarField& curwv = wv[i];
         
         forAll(pNeib, ii){
           label ind = pNeib[ii];
@@ -259,9 +261,12 @@ private:
           scalar mag_d = mag(d2);
           
           vector disp;
-          disp.x() = d2.x() * curwv[ii].x(); // * nw; // TODO it is for the weighted 
-          disp.y() = d2.y() * curwv[ii].y(); // * nw;
-          disp.z() = 0.0;
+          //disp.x() = d2.x() * curwv[ii].x(); // * nw; // TODO it is for the weighted 
+          //disp.y() = 0.0;//d2.y() * curwv[ii].y(); // * nw;
+          //disp.z() = 0.0;
+          
+          disp = curwv[ii] * d2;
+          
           displacement[i] += disp;
           tol[i] += mag_d;
           sumWeights[i] += 1;
@@ -276,6 +281,59 @@ private:
         
         
         if(itt%q_edge_norm_recalc==0){
+          
+          const labelList& pFaces = plistFaces[curI];
+          forAll(pFaces, j){
+            
+            label ind = pNeib[j];
+            point& neibP = boundaryPoints[ind];
+            vector d2 = neibP - curP;
+            
+            point mid = curP + d2/2.0;
+            scalar halfD = mag(d2)/2.0;
+            
+            //vector nnn = d2 ^ nZ;
+            
+            point midpo = mid;
+            scalar middi = halfD;
+            //plane pll(mid, nnn);
+            //Pout<< curI << " lenN  "<< mag(d2) <<endl;
+            
+            plane pll(mid, d2);
+            
+            //Pout<< "p1: "<< curP<< "  p2:  "<< neibP<< "   mid: "<< midpo<<endl;
+            
+            
+            label faceI = pFaces[j];
+            //point& faceC = faceCs[faceI];
+            //vector d = faceC - curP;
+            //scalar mag_d = mag(d);
+
+            vector fnn = faceNs[ faceI ];
+            fnn.z() = 0.0;
+            
+            point endNorm = midpo + fnn;
+            
+            point projp = pll.nearestPoint(endNorm);
+            
+            //Info<< "endNorm: "<< endNorm<< "   projp: "<< projp<<endl;
+            
+            vector realN = projp - midpo;
+            
+            //Pout<<ind<<"  nnn  "<< (realN & d2) 
+            //        << " realN: " << realN 
+            //        << " faceN: " << faceNs[ faceI ] <<endl;
+            
+            // this is for normal
+            //scalar nw = 1.0 / mag_d;
+            //pointNorm[i] += nw * faceNs[ faceI ];
+            scalar nw = 1.0 / middi;
+            pointNorm[i] += nw * realN;
+            pointNorm[i].z()=0;
+            faceToPointSumWeights[i] += nw;
+          }
+          
+          /*
           const labelList& pFaces = plistFaces[curI];
           forAll(pFaces, j){
             label faceI = pFaces[j];
@@ -289,9 +347,34 @@ private:
             pointNorm[i].z()=0;
             faceToPointSumWeights[i] += nw;
           }
+          */
+          
+          /*
+          forAll(pNeib, ii){
+            label ind = pNeib[ii];
+            point& neibP = boundaryPoints[ind];
+            vector d2 = neibP - curP;
+            
+            scalar halfD = mag(d2)/2.0;
+            scalar nw = 1.0 / halfD;
+            
+            vector nnn = d2 ^ nZ;
+            //scalar nnn = d2 & pointNorm[i];
+            //Pout<<ind<<"  nnn  "<<nnn<<endl;
+            nnn /= mag(nnn);
+            
+          
+            pointNorm[i] += nw * nnn;
+            pointNorm[i].z()=0;
+            faceToPointSumWeights[i] += nw;
+          }
+          */
         }
-        
       }
+      
+      //Pout<< " pointNorm "<<pointNorm<<endl;
+      //Info<<itt<<"   here"<<endl<<endl<<endl;
+      //std::exit(0);
       
       syncTools::syncPointList(mesh_, global_WallEdges, displacement, plusEqOp<vector>(), vector::zero);
       syncTools::syncPointList(mesh_, global_WallEdges, tol, plusEqOp<scalar>(), 0.0);
@@ -306,6 +389,9 @@ private:
           pointNorm[i] /= mag( pointNorm[i] );
         }
       }
+      //Pout<< " pointNorm "<<mag(pointNorm)<<endl;
+      //std::exit(0);
+      
 
       vectorField projectedDisplacement = transform(I - pointNorm*pointNorm, displacement);
       
@@ -330,14 +416,19 @@ private:
       forAll(local_wall_WallEdges, i){
         label ind = local_wall_WallEdges[i];
         boundaryPoints[ind] += projectedDisplacement[i];
+        //Info<< projectedDisplacement[i].component(vector::X)<<endl;
       }
       
-      displ_tol = gAverage( mag(projectedDisplacement/factor)/tol );
+      
+      displ_tol = gAverage( mag(projectedDisplacement)/tol );
       
       if(itt%1000==0){
         Info << patchIO_.name() << "  rlx iter " << itt
              << "  tolerance: " << displ_tol << endl;
       }
+      //if(itt%1000==0){
+      //  break;
+      //}
       
       itt+=1;
     }
@@ -1024,22 +1115,20 @@ private:
 
 
   template<class Patch>
-  vectorFieldList calc_edge_weights(const fvMesh& meshTmp, const Patch& patchIO_){
-    
+  scalarFieldList calc_edge_weights(const fvMesh& meshTmp, const Patch& patchIO_)
+  {
     const Patch& patch_ = meshTmp.boundaryMesh()[wallID];
-
     pointField boundaryPoints = patch_.localPoints();
-    
     const labelListList& ppp = patch_.pointEdges();
     const edgeList& ee = patch_.edges();
+    const labelList& wallsTo  = patch_.meshPoints();
     
     const labelList& meshPoints = patchIO_.meshPoints();
-    const labelList& wallsTo  = patch_.meshPoints();
+    
     labelList local_wall_WallEdges;
     labelList global_WallEdges;
     forAll(wallsTo, i){
       label lW = wallsTo[i];
-
       label inlind = findIndex(meshPoints, lW);
       if( inlind != -1){
         local_wall_WallEdges.append( i );
@@ -1047,7 +1136,6 @@ private:
       }
     }
     
-    // relax edges
     label NN = local_wall_WallEdges.size();
     labelListList nepe;
     forAll(local_wall_WallEdges, i){
@@ -1071,49 +1159,40 @@ private:
       nepe.append(nel);
     }
     
-    vectorFieldList weights( NN );
-    vectorField sumWeights( NN, vector::zero );
+    scalarFieldList weights( NN );
+    scalarField sumWeights( NN, 0.0 );
 
     forAll(nepe, i){
       label  curI = local_wall_WallEdges[i];
       point& curP = boundaryPoints[curI];
       const labelList& pNeib = nepe[i];
 
-      vectorField& pw = weights[i];
+      scalarField& pw = weights[i];
       pw.setSize(pNeib.size());
       
-      vector sumw = vector::zero;
+      scalar sumw = 0.0;
       forAll(pNeib, ii){
         label ind = pNeib[ii];
         point& neibP = boundaryPoints[ind];
         vector d2 = neibP - curP;
+        scalar magd2 = mag(d2);
 
-        vector w = vector::zero;
+        scalar w = 0.0;
+        if( magd2>SMALL) w = 1.0 / magd2;
         
-        for(int j=0; j<3; j++){
-          if(d2[j]!=0)
-            w[j] = 1/ std::abs( d2[j] );
-          else
-            w[j] = 0.0;
-        }
         pw[ii] = w;
         sumw += pw[ii];
       }
       sumWeights[i] = sumw;
     }
     
-    syncTools::syncPointList(meshTmp, global_WallEdges, sumWeights, plusEqOp<vector>(), vector::zero);
+    syncTools::syncPointList(meshTmp, global_WallEdges, sumWeights, plusEqOp<scalar>(), 0.0);
     
     forAll(weights, i){
-      vectorField& pw = weights[i];
-      vector &sw = sumWeights[i];
+      scalarField& pw = weights[i];
+      scalar &sw = sumWeights[i];
       forAll(pw, j){
-        vector &ppw = pw[j];
-        for(int ii=0; ii<3; ii++){
-          if( sw[ii]!=0 ){
-            ppw[ii] /= sw[ii];
-          }
-        }
+        if( mag(sw)>SMALL ) pw[j] /= sw;
       }
     }
 
