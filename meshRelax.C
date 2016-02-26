@@ -122,8 +122,9 @@ meshRelax::meshRelax(dynamicFvMesh& mesh, const argList& args)
   Info << "************************************************************"
        << nl << endl;
   
-  inletWeights  = calc_edge_weights( meshTmp, meshTmp.boundaryMesh()[inletID] );
-  outletWeights = calc_edge_weights( meshTmp, meshTmp.boundaryMesh()[outletID]);
+  // calculating weights for the edges inlet-wall, outlet-wall
+  inletWallEdgeWeights  = calc_edge_weights( meshTmp, meshTmp.boundaryMesh()[inletID] );
+  outletWallEdgeWeights = calc_edge_weights( meshTmp, meshTmp.boundaryMesh()[outletID]);
 }
 
 void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
@@ -165,12 +166,12 @@ void meshRelax::meshUpdate(vectorField& pointDispWall, Time& time){
 
 // Relaxing edges. 1D
   Info << "Relaxing inlet-wall edge..." << endl;
-  vectorField wiEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[inletID], inletWeights);
+  vectorField wiEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[inletID], inletWallEdgeWeights);
   pointField mpWIE = doWallDisplacement( wiEdgeRlx );
   mesh_.movePoints( mpWIE );
 
   Info << "Relaxing outlet-wall edge..." << endl;
-  vectorField woEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[outletID], outletWeights);
+  vectorField woEdgeRlx = edgeRelaxation( mesh_.boundaryMesh()[outletID], outletWallEdgeWeights);
   pointField mpWOE = doWallDisplacement( woEdgeRlx );
   mesh_.movePoints( mpWOE );
   Info << "Edge relaxation cpuTime: "
@@ -619,8 +620,8 @@ scalar meshRelax::extrapolateConcentrationLinearZ(const pointField& loc_points,
 }
 
 
-void meshRelax::setUpPairsConc(){
-  
+void meshRelax::setUpPairsConc()
+{
   const labelListList& plistEdges = mesh_.boundaryMesh()[wallID].pointEdges();
   const edgeList& edgeL = mesh_.boundaryMesh()[wallID].edges();
   
@@ -628,7 +629,8 @@ void meshRelax::setUpPairsConc(){
   
   labelList secondLine(local_wall_WallsInletEdges.size());
   
-  forAll(local_wall_WallsInletEdges, i){
+  forAll(local_wall_WallsInletEdges, i)
+  {
     inletTriple[i].setSize( 3 );
     inletTriple[i][0] = local_wall_WallsInletEdges[i];
     
@@ -636,7 +638,8 @@ void meshRelax::setUpPairsConc(){
     
     label secondLineP = -1;
     
-    forAll(currentNextEdges, j){
+    forAll(currentNextEdges, j)
+    {
       edge edg = edgeL[ currentNextEdges[j] ];
       
       label edgePair = -1;
@@ -658,13 +661,14 @@ void meshRelax::setUpPairsConc(){
   }
   
   
-  forAll(secondLine, i){
-    
+  forAll(secondLine, i)
+  {
     const labelList& currentNextEdges = plistEdges[ secondLine[i] ];
     
     label thirdLineP = -1;
     
-    forAll(currentNextEdges, j){
+    forAll(currentNextEdges, j)
+    {
       edge edg = edgeL[ currentNextEdges[j] ];
       
       label edgePair = -1;

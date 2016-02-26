@@ -61,6 +61,8 @@ public:
 
   // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   // public functions
+  
+  // update a dynamic mesh according to the vector field for wall points
   void meshUpdate(vectorField&, Time&);
 
   word get_version() const;
@@ -70,6 +72,7 @@ private:
   // the version of meshRelax and date it was modified
   const word version;
   const word date;
+  
   ////////////////////////////////////////////////////
   
   // dictionary variables
@@ -91,7 +94,9 @@ private:
   scalar inigradingZ;
   scalar timeCoefZ;
   int Nz;
+  
   ////////////////////////////////////////////////////
+  
   dynamicFvMesh& mesh_;
   scalar deltaT;
   // ID of each patch
@@ -112,14 +117,13 @@ private:
   labelList local_wall_WallsCycEdges1;
   labelList local_wall_WallsCycEdges2;
 
-  
   // map for the extrapolation of the concentration on the edge
-  // it fixes inlet boundary condition inconsistance
+  // it fixes inlet boundary condition inconsistency
   labelListList inletTriple;
   
   vectorFieldList wallWeights;
-  scalarFieldList inletWeights;
-  scalarFieldList outletWeights;
+  scalarFieldList inletWallEdgeWeights;
+  scalarFieldList outletWallEdgeWeights;
   
   ///////////////////////////////////////////////////////////////////////////
   // private functions
@@ -190,8 +194,6 @@ private:
     
     // relax edges
     label NN = local_wall_WallEdges.size();
-    //label globalNN = NN;
-    //reduce(globalNN, sumOp<label>());
     
     labelListList nepe;
     neighborListEdge(local_wall_WallEdges, ee, pointEdgesLi, nepe);
@@ -203,11 +205,9 @@ private:
     while(displ_tol>rlxTol)
     {
       if(itt%q_edge_norm_recalc==0){
-        forAll(pointNorm, pni)
-        {
-          pointNorm[pni] = vector::zero;
-          faceToPointSumWeights[pni] = 0.0;
-        }
+        // set fields to zero
+        pointNorm = vector::zero;
+        faceToPointSumWeights = 0.0;
       }
       
       pointField faceCs = faceCentres(boundaryPoints, llf);
@@ -342,11 +342,9 @@ private:
     while(displ_tol>rlxTol)
     {
       if(itt%q_norm_recalc==0){
-        forAll(pointNorm, pni)
-        {
-          pointNorm[pni] = vector::zero;
-          faceToPointSumWeights[pni] = 0.0;
-        }
+        // set fields to zero
+        pointNorm = vector::zero;
+        faceToPointSumWeights = 0.0;
       }
       // calculate current face centers
       pointField faceCs = faceCentres(boundaryPoints, llf);
