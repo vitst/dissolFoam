@@ -4,13 +4,13 @@
     (
          fvm::div(phi, U)
       -  fvm::laplacian(nu, U)
-      == fvOptions(U)
+      //== fvOptions(U)
     );
 
     UEqn().relax();
 
-    fvOptions.constrain(UEqn());
+    //fvOptions.constrain(UEqn());
 
     solve(UEqn() == -fvc::grad(p));
 
-    fvOptions.correct(U);
+    //fvOptions.correct(U);

@@ -6,7 +6,7 @@
 
     surfaceScalarField phiHbyA("phiHbyA", fvc::interpolate(HbyA) & mesh.Sf());
 
-    fvOptions.makeRelative(phiHbyA);
+    //fvOptions.makeRelative(phiHbyA);
 
     adjustPhi(phiHbyA, U, p);
 
@@ -36,5 +36,5 @@
     // Momentum corrector
     U = HbyA - rAU*fvc::grad(p);
     U.correctBoundaryConditions();
-    fvOptions.correct(U);
+    //fvOptions.correct(U);
 }

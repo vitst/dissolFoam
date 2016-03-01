@@ -35,7 +35,7 @@ Description
 #include "fvCFD.H"
 
 // simpleFoam
-#include "fvIOoptionList.H"
+//#include "fvIOoptionList.H"
 
 // OF
 #include "pointPatchField.H"
@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
   #include "createDynamicFvMesh.H"
 
   // OF simpleFoam  
-  #include "createFvOptions.H" 
+  //#include "createFvOptions.H" 
   
   #include "readDicts.H"
   #include "createFields.H"
@@ -189,10 +189,10 @@ int main(int argc, char *argv[])
   int iter = 0;
   while ( true ){
     iter++;
-
+    
     double residual = solve
     (
-      fvm::div(phi, C) - fvm::laplacian(D, C) == fvOptions(C)
+      fvm::div(phi, C) - fvm::laplacian(D, C) //== fvOptions(C)
     ).initialResidual();
     
     if( residual < convCrit ){
