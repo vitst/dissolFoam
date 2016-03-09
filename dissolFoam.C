@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
     
     double residual = solve
     (
-      fvm::div(phi, C) - fvm::laplacian(D, C) //== fvOptions(C)
+      fvm::div(phi, C) - fvm::laplacian(D, C) // == fvOptions(C)
     ).initialResidual();
     
     if( residual < convCrit ){

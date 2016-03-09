@@ -724,7 +724,8 @@ void meshRelax::neighborListEdge
     forAll(lll, ii){
       const edge& ed = eList[ lll[ii] ];
       label edb = ed.start();
-
+      
+      // @TODO use otherVertex function instead
       if( edb!=ind && findIndex(list, edb) != -1 ){
         nel.append(edb);
       }
