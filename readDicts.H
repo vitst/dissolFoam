@@ -35,6 +35,22 @@
           << "There is no gradCWrite parameter in dissolFoam dictionary"
           << exit(FatalError);
   }
+  
+  bool limitFlux = false;
+  scalar limitValue = 1.0;
+  if( !constFlux ){
+    if( !dissolProperties.readIfPresent<bool>("limitFlux", limitFlux) ){
+      SeriousErrorIn("main")
+            << "There is no limitFlux parameter in dissolFoam dictionary"
+            << exit(FatalError);
+    }
+    
+    if( !dissolProperties.readIfPresent<scalar>("limitValue", limitValue) ){
+      SeriousErrorIn("main")
+            << "There is no limitValue parameter in dissolFoam dictionary"
+            << exit(FatalError);
+    }
+  }
 
 
   Info << "Reading transportProperties" << nl;
@@ -93,6 +109,8 @@
   Info << "dissolFoamDict, inertia:    " << inertia    << nl;
   Info << "dissolFoamDict, constFlux:  " << constFlux  << nl;
   Info << "dissolFoamDict, gradCWrite: " << gradCWrite << nl;
+  Info << "dissolFoamDict, limitFlux:  " << limitFlux  << nl;
+  Info << "dissolFoamDict, limitValue: " << limitValue << nl;
   Info << "fvSolutions, convCrit:      " << convCrit   << nl;
   Info << "fvSolutions, maxIter:       " << maxIter    << nl;
   Info << "***************************************************" << endl;

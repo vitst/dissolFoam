@@ -60,6 +60,7 @@ private:
   
   // functions
   scalar getInletFlowRateT0(const surfaceScalarField&);
+  
 public:
   
   // Constractors
@@ -67,7 +68,6 @@ public:
   
   // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   // functions
-  
   scalar getInletFlowRate(const surfaceScalarField&, bool);
 
   vectorField getWallPointMotion(const fvMesh&, const volScalarField&, const scalar, const label);

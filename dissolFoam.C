@@ -170,9 +170,16 @@ int main(int argc, char *argv[])
  *   Scale U and phi 
  *   constFlux == true  -> constant flow rate
  *   constFlux == false -> constant pressure drop
+ * 
+ *   limitFlux == true  -> limit a flow rate in case of
+ *                         constant pressure drop
+ *   limitValue = 3.0   -> limit a flow rate to 3.0 * 
  *###############################################*/
-
     scalar Q  = fieldOp.getInletFlowRate(phi, constFlux);
+    if(!constFlux && limitFlux){
+      scalar currentQ  = fieldOp.getInletFlowRate(phi, true);
+      if( currentQ > limitValue * Q ) Q = currentQ / limitValue;
+    }
     scalar nU = Q / inletAreaT0;
     Info << "U and phi scale factor: " << nU << "   Q: "<< Q << nl << endl;
 
