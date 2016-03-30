@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
  * 
  *   limitFlux == true  -> limit a flow rate in case of
  *                         constant pressure drop
- *   limitValue = 3.0   -> limit a flow rate to 3.0 * 
+ *   limitValue = 3.0   -> limit a flow rate to 3.0 * rate at time 0
  *###############################################*/
     scalar Q  = fieldOp.getInletFlowRate(phi, constFlux);
     if(!constFlux && limitFlux){
