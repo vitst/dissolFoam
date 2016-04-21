@@ -12,19 +12,19 @@
 #include "pointPatchField.H"
 #include "volPointInterpolation.H"
 
-fieldOperations::fieldOperations(const argList& args, const label inletID)
+fieldOperations::fieldOperations(const argList& args, const label patchID)
 :
 args_(args),
-inletID_(inletID)
+scalingPatchID_(patchID)
 {
-  inletFlowRateT0calculated = false;
-  inletFlowRateT0 = 0.0;
+  scalingFlowRateT0calculated = false;
+  scalingFlowRateT0 = 0.0;
 }
 
 
-scalar fieldOperations::getInletFlowRateT0(const surfaceScalarField& phi)
+scalar fieldOperations::getScalingFlowRateT0(const surfaceScalarField& phi)
 {
-  if( !inletFlowRateT0calculated ){
+  if( !scalingFlowRateT0calculated ){
     Foam::Time timeTmp(Foam::Time::controlDictName, args_);
     Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args_);
     timeTmp.setTime(timeDirs[0], 0);
@@ -60,15 +60,15 @@ scalar fieldOperations::getInletFlowRateT0(const surfaceScalarField& phi)
               <<exit(FatalError);
     }
   
-    inletFlowRateT0 = -gSum( phiTmp.boundaryField()[inletID_] );
-    inletFlowRateT0calculated = true;
+    scalingFlowRateT0 = mag( gSum( phiTmp.boundaryField()[scalingPatchID_] ) );
+    scalingFlowRateT0calculated = true;
   }
-  return inletFlowRateT0;
+  return scalingFlowRateT0;
 }
 
-scalar fieldOperations::getInletFlowRate(const surfaceScalarField& phi, bool updateFlowRate)
+scalar fieldOperations::getScalingFlowRate(const surfaceScalarField& phi, bool updateFlowRate)
 {
-  return ((updateFlowRate) ? -gSum(phi.boundaryField()[inletID_]):getInletFlowRateT0(phi));
+  return ((updateFlowRate) ? mag( gSum(phi.boundaryField()[scalingPatchID_]) ):getScalingFlowRateT0(phi));
 }
 
 
@@ -91,7 +91,7 @@ vectorField fieldOperations::getWallPointMotion(const fvMesh& mesh,const volScal
   return (l_T*motionC*motionN);
 }
 
-scalar fieldOperations::getInletAreaT0(){
+scalar fieldOperations::getScalingAreaT0(){
   Foam::Time timeTmp(Foam::Time::controlDictName, args_);
   Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args_);
   timeTmp.setTime(timeDirs[0], 0);
@@ -108,11 +108,11 @@ scalar fieldOperations::getInletAreaT0(){
   );
   
   if( timeTmp.timeName()!="0" ){
-    SeriousErrorIn("fieldOperations::getInletAreaT0")
+    SeriousErrorIn("fieldOperations::getScalingAreaT0")
             <<"There is no 0 time directory. Check your decomposition as well!"
             <<exit(FatalError);
   }
   
   const surfaceScalarField& magSf2 = meshTmp.magSf();
-  return gSum( magSf2.boundaryField()[inletID_] );
+  return gSum( magSf2.boundaryField()[scalingPatchID_] );
 }

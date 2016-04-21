@@ -82,7 +82,7 @@ Description
  * @TODO
  * - create all the lists for time 0
  * - check the parameter preservePatches for cyclic BC
- * 
+ * - make mesh relax independent on the inletID and outletID
  * 
  #####################################################################*/
 
@@ -100,17 +100,20 @@ int main(int argc, char *argv[])
 
   // Get patch ID for moving boundaries ("walls" "inlet")
   const label wallID  = mesh.boundaryMesh().findPatchID("walls");
-  const label inletID = mesh.boundaryMesh().findPatchID("inlet");
+  //const label inletID = mesh.boundaryMesh().findPatchID("inlet");
+  const label outletID = mesh.boundaryMesh().findPatchID("outlet");
   
   meshRelax mesh_rlx(mesh, args);
   Info << "Setup mesh relaxation object. meshRelax version is "
           << mesh_rlx.get_version() << endl;
 
-  fieldOperations fieldOp(args, inletID);
+  fieldOperations fieldOp(args, outletID);
   Info << "Setup field operation object" << endl;
   
-  const scalar inletAreaT0 = fieldOp.getInletAreaT0();
-  Info << "Initial inlet area: " << inletAreaT0 << nl;
+  Info<<"Patch \""<<mesh.boundaryMesh().names()[outletID]<<"\" is used for scaling U"<<nl;
+  
+  const scalar scalingAreaT0 = fieldOp.getScalingAreaT0();
+  Info << "Initial patch area for the flow rate scaling: " << scalingAreaT0 << nl;
   Info << "U field is scaled so that <U_inlet> = 1 at t=0" << nl;
   Info << "phi field is unscaled" << nl
        << "Used to recover scale factor after restart" << endl;
@@ -167,7 +170,7 @@ int main(int argc, char *argv[])
     << nl << nl << endl;
 
 /*###############################################
- *   Scale U and phi 
+ *   Scale U and phi (using outlet value)
  *   constFlux == true  -> constant flow rate
  *   constFlux == false -> constant pressure drop
  * 
@@ -175,12 +178,12 @@ int main(int argc, char *argv[])
  *                         constant pressure drop
  *   limitValue = 3.0   -> limit a flow rate to 3.0 * rate at time 0
  *###############################################*/
-    scalar Q  = fieldOp.getInletFlowRate(phi, constFlux);
+    scalar Q  = fieldOp.getScalingFlowRate(phi, constFlux);
     if(!constFlux && limitFlux){
-      scalar currentQ  = fieldOp.getInletFlowRate(phi, true);
+      scalar currentQ  = fieldOp.getScalingFlowRate(phi, true);
       if( currentQ > limitValue * Q ) Q = currentQ / limitValue;
     }
-    scalar nU = Q / inletAreaT0;
+    scalar nU = Q / scalingAreaT0;
     Info << "U and phi scale factor: " << nU << "   Q: "<< Q << nl << endl;
 
     U   == U   / nU;

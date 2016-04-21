@@ -51,15 +51,15 @@ class fieldOperations{
 
 private:
   const argList args_;
-  const label inletID_;
+  const label scalingPatchID_;
   
-  // aux. parameter in order to calculate inlet flow rate at t0 only once
-  bool inletFlowRateT0calculated;
-  // aux. parameter where we store inlet flow rate ar t0
-  scalar inletFlowRateT0;
+  // aux. parameter in order to calculate flow rate for scaling at t0 only once
+  bool scalingFlowRateT0calculated;
+  // aux. parameter where we store flow rate  for scaling at t0
+  scalar scalingFlowRateT0;
   
   // functions
-  scalar getInletFlowRateT0(const surfaceScalarField&);
+  scalar getScalingFlowRateT0(const surfaceScalarField&);
   
 public:
   
@@ -68,11 +68,11 @@ public:
   
   // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   // functions
-  scalar getInletFlowRate(const surfaceScalarField&, bool);
+  scalar getScalingFlowRate(const surfaceScalarField&, bool);
 
   vectorField getWallPointMotion(const fvMesh&, const volScalarField&, const scalar, const label);
   
-  scalar getInletAreaT0();
+  scalar getScalingAreaT0();
 };
 
 
