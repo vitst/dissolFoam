@@ -112,8 +112,9 @@ int main(int argc, char *argv[])
   
   Info<<"Patch \""<<mesh.boundaryMesh().names()[outletID]<<"\" is used for scaling U"<<nl;
   
-  const scalar scalingAreaT0 = fieldOp.getScalingAreaT0();
-  Info << "Initial patch area for the flow rate scaling: " << scalingAreaT0 << nl;
+  //const scalar scalingAreaT0 = fieldOp.getScalingAreaT0();
+  Info << "Initial patch area for the flow rate scaling: " 
+          << fieldOp.getScalingAreaT0() << nl;
   Info << "U field is scaled so that <U_inlet> = 1 at t=0" << nl;
   Info << "phi field is unscaled" << nl
        << "Used to recover scale factor after restart" << endl;
@@ -154,11 +155,13 @@ int main(int argc, char *argv[])
     steadyStateControl simple(mesh);
     while ( simple.loop() )
     {
-        if(inertia){                 // Navier Stokes
-            #include "UEqn.H"
+        if(inertia)
+        {
+            #include "UEqn.H"        // Navier Stokes
             #include "pEqn.H"
         }
-        else{
+        else
+        {
             #include "UEqnStokes.H"  // Stokes
             #include "pEqn.H"
         }
@@ -177,13 +180,30 @@ int main(int argc, char *argv[])
  *   limitFlux == true  -> limit a flow rate in case of
  *                         constant pressure drop
  *   limitValue = 3.0   -> limit a flow rate to 3.0 * rate at time 0
+ * -----------------------------------------------------------------------
+ *   
+ * 
+ * 
  *###############################################*/
-    scalar Q  = fieldOp.getScalingFlowRate(phi, constFlux);
-    if(!constFlux && limitFlux){
-      scalar currentQ  = fieldOp.getScalingFlowRate(phi, true);
-      if( currentQ > limitValue * Q ) Q = currentQ / limitValue;
+    scalar Q  = fieldOp.getScalingFlowRate(phi)  ;
+    scalar Q0 = fieldOp.getScalingFlowRateT0(phi);
+    scalar A0 = fieldOp.getScalingAreaT0();
+    
+    scalar nU = 1.0;
+    if(rescale && !inertia)
+      nU = Q0/A0;
+      
+    if(constFlux)
+    {
+      nU *= Q / Q0;
     }
-    scalar nU = Q / scalingAreaT0;
+    else
+    {
+      if(limitFlux && Q > Q0*limitValue)
+        nU *= Q / (Q0*limitValue);
+    }
+      
+    //scalar nU = Q / Q0;
     Info << "U and phi scale factor: " << nU << "   Q: "<< Q << nl << endl;
 
     U   == U   / nU;

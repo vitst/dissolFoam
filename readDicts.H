@@ -21,6 +21,28 @@
           << "There is no inertia parameter in dissolFoam dictionary"
           << exit(FatalError);
   }
+  
+  if(inertia)
+  {
+    Info<<nl<<"**************************************************************"<<nl;
+    Info<<nl<<"!!!! Warning !!!!"<<nl;
+    WarningIn("readDicts.H")
+            << "The 'inertia' parameter is set to 'true', which means\n"
+            "the Navier-Stokes flow will be used instead of the Stokes flow.\n"
+            "The U and phi fields will not be rescaled. User should specify\n"
+            "a pressure difference as 0 at the inlet and A*nu*L at the outlet,\n"
+            "where nu is the kinematic viscosity from transportProperties file;\n"
+            "L is a length of the fracture and A is a geometric parameter\n"
+            "(12 in case of two parallel plates)."<<nl;
+    Info<<"**************************************************************"<<nl<<nl;
+  }
+    
+  bool rescale;
+  if( !dissolProperties.readIfPresent<bool>("rescale", rescale) ){
+    SeriousErrorIn("main")
+          << "There is no rescale parameter in dissolFoam dictionary"
+          << exit(FatalError);
+  }
 
   bool constFlux;
   if( !dissolProperties.readIfPresent<bool>("constFlux", constFlux) ){
