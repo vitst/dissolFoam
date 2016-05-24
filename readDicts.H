@@ -129,6 +129,7 @@
   Info << "transportProperties, D:     " << D          << nl;
   Info << "transportProperties, l_T:   " << l_T        << nl;
   Info << "dissolFoamDict, inertia:    " << inertia    << nl;
+  Info << "dissolFoamDict, rescale:    " << rescale    << nl;
   Info << "dissolFoamDict, constFlux:  " << constFlux  << nl;
   Info << "dissolFoamDict, gradCWrite: " << gradCWrite << nl;
   Info << "dissolFoamDict, limitFlux:  " << limitFlux  << nl;
