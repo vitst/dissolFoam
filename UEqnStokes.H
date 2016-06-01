@@ -1,15 +1,10 @@
-    // Momentum predictor
+// Momentum predictor
 
-    tmp<fvVectorMatrix> UEqn
-    (
-      -  fvm::laplacian(nu, U)
-      //== fvOptions(U)
-    );
+tmp<fvVectorMatrix> UEqn
+(
+  -  fvm::laplacian(nu, U)
+);
 
-    UEqn().relax();
+UEqn().relax();
 
-    //fvOptions.constrain(UEqn());
-
-    solve(UEqn() == -fvc::grad(p));
-
-    //fvOptions.correct(U);
+solve(UEqn() == -fvc::grad(p));

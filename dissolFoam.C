@@ -155,17 +155,49 @@ int main(int argc, char *argv[])
     steadyStateControl simple(mesh);
     while ( simple.loop() )
     {
-        if(inertia)
+      //Info << "Simple" << nl;
+      if(inertia)
+      {
+        //Info << "Inertia" << nl;
+        #include "UEqn.H"        // Navier Stokes
+        #include "pEqn.H"
+      }
+      else
+      {
+        //Info << "Stockes" << nl;
+        #include "UEqnStokes.H"  // Stokes
+        #include "pEqn.H"
+      }
+      
+      if(rescale){
+        scalar Q = fieldOp.getScalingFlowRate(phi);
+
+        scalar scaleFactor = 1.0;
+                
+        if(constFlux)
         {
-            #include "UEqn.H"        // Navier Stokes
-            #include "pEqn.H"
+          if(Q>SMALL) scaleFactor = limitValue / Q;
         }
         else
         {
-            #include "UEqnStokes.H"  // Stokes
-            #include "pEqn.H"
+          if(Q>limitValue) scaleFactor = limitValue / Q;
         }
+
+        // apply relaxation parameter to the scaling factor
+        scaleFactor = 1 + rescaleRelaxPar * (scaleFactor - 1);
+        
+        Info<<"Rescaling p and U fields. scaleFactor="
+                <<scaleFactor
+                <<"  flow rate Q="
+                <<Q
+                <<nl;
+        
+        p   == scaleFactor * p;
+        U   == scaleFactor * U;
+      }
     }
+    
+    Info<< "Final flow rate: "<<fieldOp.getScalingFlowRate(phi)<<nl<<nl;
 
     Info << "Flow solver: "
     << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
@@ -180,11 +212,8 @@ int main(int argc, char *argv[])
  *   limitFlux == true  -> limit a flow rate in case of
  *                         constant pressure drop
  *   limitValue = 3.0   -> limit a flow rate to 3.0 * rate at time 0
- * -----------------------------------------------------------------------
- *   
- * 
- * 
  *###############################################*/
+    /*
     scalar Q  = fieldOp.getScalingFlowRate(phi)  ;
     scalar Q0 = fieldOp.getScalingFlowRateT0(phi);
     scalar A0 = fieldOp.getScalingAreaT0();
@@ -202,12 +231,13 @@ int main(int argc, char *argv[])
       if(limitFlux && Q > Q0*limitValue)
         nU *= Q / (Q0*limitValue);
     }
+    */
       
     //scalar nU = Q / Q0;
-    Info << "U and phi scale factor: " << nU << "   Q: "<< Q << nl << endl;
+    //Info << "U and phi scale factor: " << nU << "   Q: "<< Q << nl << endl;
 
-    U   == U   / nU;
-    phi == phi / nU;
+    //U   == U   / nU;
+    //phi == phi / nU;
 
 /*############################################
  *   Steady-state convection-diffusion solver
@@ -221,14 +251,15 @@ int main(int argc, char *argv[])
     
     double residual = solve
     (
-      fvm::div(phi, C) - fvm::laplacian(D, C) // == fvOptions(C)
+      fvm::div(phi, C) - fvm::laplacian(D, C)
     ).initialResidual();
     
     if( residual < convCrit ){
       Info << "Convection-diffusion: "
            << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
            << "ClockTime = " << runTime.elapsedClockTime() << " s" <<nl 
-           << "Converged in " << iter << " steps" << nl << endl;
+           << "Converged in " << iter << " steps.  Residual="<< residual
+           << nl << endl;
 
       if(iter >= maxIter){
         Info << nl << "dissolFoam Runtime WARNING:"
@@ -243,7 +274,7 @@ int main(int argc, char *argv[])
            << " residual: "<< residual << " > " << convCrit << endl;
     }
   }
-
+  
 // *********************************************************
 // *    Write Output data
 // *********************************************************
@@ -251,14 +282,14 @@ int main(int argc, char *argv[])
     if(gradCWrite) gradC == -fvc::snGrad(C);
     
     // Rescale phi for restart and for next cycle
-    phi == phi * nU;
+    //phi == phi * nU;
 
     Info << "Write fields: Time = " << runTime.timeName() << nl <<endl;
     (runTimeIs0) ? runTime.writeNow() : runTime.write();
     runTimeIs0 = false;
 
     // Rescale U for next cycle
-    U == U * nU;
+    //U == U * nU;
   }
 
   Info << "End" << endl;

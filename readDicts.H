@@ -15,6 +15,14 @@
     )
   );
   
+  bool gradCWrite;
+  if( !dissolProperties.readIfPresent<bool>("gradCWrite", gradCWrite) ){
+    SeriousErrorIn("main")
+          << "There is no gradCWrite parameter in dissolFoam dictionary"
+          << exit(FatalError);
+  }
+  
+  
   bool inertia;
   if( !dissolProperties.readIfPresent<bool>("inertia", inertia) ){
     SeriousErrorIn("main")
@@ -43,6 +51,14 @@
           << "There is no rescale parameter in dissolFoam dictionary"
           << exit(FatalError);
   }
+  
+  scalar rescaleRelaxPar;
+  if( !dissolProperties.readIfPresent<scalar>("rescaleRelaxPar", rescaleRelaxPar) ){
+    SeriousErrorIn("main")
+          << "There is no rescaleRelaxPar parameter in dissolFoam dictionary"
+          << exit(FatalError);
+  }
+  
 
   bool constFlux;
   if( !dissolProperties.readIfPresent<bool>("constFlux", constFlux) ){
@@ -51,27 +67,21 @@
           << exit(FatalError);
   }
 
-  bool gradCWrite;
-  if( !dissolProperties.readIfPresent<bool>("gradCWrite", gradCWrite) ){
-    SeriousErrorIn("main")
-          << "There is no gradCWrite parameter in dissolFoam dictionary"
-          << exit(FatalError);
-  }
-  
+  /*
   bool limitFlux = false;
-  scalar limitValue = 1.0;
   if( !constFlux ){
     if( !dissolProperties.readIfPresent<bool>("limitFlux", limitFlux) ){
       SeriousErrorIn("main")
             << "There is no limitFlux parameter in dissolFoam dictionary"
             << exit(FatalError);
     }
-    
-    if( !dissolProperties.readIfPresent<scalar>("limitValue", limitValue) ){
-      SeriousErrorIn("main")
-            << "There is no limitValue parameter in dissolFoam dictionary"
-            << exit(FatalError);
-    }
+  }
+  */
+  scalar limitValue = 1.0;
+  if( !dissolProperties.readIfPresent<scalar>("limitValue", limitValue) ){
+    SeriousErrorIn("main")
+          << "There is no limitValue parameter in dissolFoam dictionary"
+          << exit(FatalError);
   }
 
 
@@ -130,10 +140,11 @@
   Info << "transportProperties, l_T:   " << l_T        << nl;
   Info << "dissolFoamDict, inertia:    " << inertia    << nl;
   Info << "dissolFoamDict, rescale:    " << rescale    << nl;
+  Info << "dissolFoamDict, scaleRlxr:  " << rescaleRelaxPar << nl;
   Info << "dissolFoamDict, constFlux:  " << constFlux  << nl;
-  Info << "dissolFoamDict, gradCWrite: " << gradCWrite << nl;
-  Info << "dissolFoamDict, limitFlux:  " << limitFlux  << nl;
+  //Info << "dissolFoamDict, limitFlux:  " << limitFlux  << nl;
   Info << "dissolFoamDict, limitValue: " << limitValue << nl;
+  Info << "dissolFoamDict, gradCWrite: " << gradCWrite << nl;
   Info << "fvSolutions, convCrit:      " << convCrit   << nl;
   Info << "fvSolutions, maxIter:       " << maxIter    << nl;
   Info << "***************************************************" << endl;
