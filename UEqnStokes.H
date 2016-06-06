@@ -1,4 +1,4 @@
-// Momentum predictor
+// Momentum predictor. Stokes.
 
 tmp<fvVectorMatrix> UEqn
 (

@@ -44,7 +44,6 @@ Contributors/Copyright:
 #ifndef FIELDOPERATIONS_H
 #define	FIELDOPERATIONS_H
 
-
 #include "fvCFD.H"
   
 class fieldOperations{
@@ -62,17 +61,14 @@ private:
   // aux. parameter where we store area of the patch for scaling at t=0
   scalar scalingAreaT0;
   
-  // functions
-  //scalar getScalingFlowRateT0(const surfaceScalarField&);
-  
 public:
   
   // Constractors
   fieldOperations(const argList&, const label);
   
   // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  // functions
-  vectorField getWallPointMotion(const fvMesh&, const volScalarField&, const scalar, const label);
+  // member functions
+  vectorField getWallPointMotion(const fvMesh&, const volScalarField&, const label);
   
   scalar getScalingFlowRateT0(const surfaceScalarField&);
   scalar getScalingFlowRate(const surfaceScalarField&);

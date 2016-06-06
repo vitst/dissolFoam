@@ -8,12 +8,8 @@
 
 #include "coupledPatchInterpolation.H"
 
-#include "pointMesh.H"
-#include "pointPatchField.H"
-#include "volPointInterpolation.H"
-
-fieldOperations::fieldOperations(const argList& args, const label patchID)
-:
+fieldOperations::
+fieldOperations(const argList& args, const label patchID):
 args_(args),
 scalingPatchID_(patchID)
 {
@@ -25,7 +21,8 @@ scalingPatchID_(patchID)
 }
 
 
-scalar fieldOperations::getScalingFlowRateT0(const surfaceScalarField& phi)
+scalar fieldOperations::
+getScalingFlowRateT0(const surfaceScalarField& phi)
 {
   if( !flowRateAtT0calculated ){
     Foam::Time timeTmp(Foam::Time::controlDictName, args_);
@@ -34,26 +31,26 @@ scalar fieldOperations::getScalingFlowRateT0(const surfaceScalarField& phi)
 
     Foam::fvMesh meshTmp
     (
-        Foam::IOobject
-        (
-            Foam::fvMesh::defaultRegion,
-            timeTmp.timeName(),
-            timeTmp,
-            Foam::IOobject::MUST_READ
-        )
+      Foam::IOobject
+      (
+        Foam::fvMesh::defaultRegion,
+        timeTmp.timeName(),
+        timeTmp,
+        Foam::IOobject::MUST_READ
+      )
     );
 
     surfaceScalarField phiTmp
     (
-        IOobject
-        (
-            "phi",
-            timeTmp.timeName(),
-            meshTmp,
-            IOobject::READ_IF_PRESENT,
-            IOobject::NO_WRITE
-        ),
-        phi
+      IOobject
+      (
+        "phi",
+        timeTmp.timeName(),
+        meshTmp,
+        IOobject::READ_IF_PRESENT,
+        IOobject::NO_WRITE
+      ),
+      phi
     );
     
     // in case 0 time does not exist
@@ -63,28 +60,32 @@ scalar fieldOperations::getScalingFlowRateT0(const surfaceScalarField& phi)
               <<exit(FatalError);
     }
   
-    //scalingFlowRateT0 = mag( gSum( phiTmp.boundaryField()[scalingPatchID_] ) );
     scalingFlowRateT0 = getScalingFlowRate(phiTmp);
     flowRateAtT0calculated = true;
   }
   return scalingFlowRateT0;
 }
 
-scalar fieldOperations::getScalingFlowRate(const surfaceScalarField& phi)
+scalar fieldOperations::
+getScalingFlowRate(const surfaceScalarField& phi)
 {
   return mag( gSum(phi.boundaryField()[scalingPatchID_]) );
 }
 
 
-vectorField fieldOperations::getWallPointMotion(const fvMesh& mesh, const volScalarField& C,
-                                               const scalar l_T, const label wallID)
+vectorField fieldOperations::
+getWallPointMotion(const fvMesh& mesh, const volScalarField& C, 
+                   const label movingPatchID)
 {
   // interpolate the concentration from cells to wall faces
-  coupledPatchInterpolation patchInterpolator( mesh.boundaryMesh()[wallID], mesh );
+  coupledPatchInterpolation patchInterpolator
+  (
+    mesh.boundaryMesh()[movingPatchID], mesh 
+  );
 
   // concentration and normals on the faces
-  scalarField pointCface = -C.boundaryField()[wallID].snGrad();
-  vectorField pointNface = mesh.boundaryMesh()[wallID].faceNormals();
+  scalarField pointCface = -C.boundaryField()[movingPatchID].snGrad();
+  vectorField pointNface = mesh.boundaryMesh()[movingPatchID].faceNormals();
   
   scalarField motionC = patchInterpolator.faceToPointInterpolate(pointCface);
   vectorField motionN = patchInterpolator.faceToPointInterpolate(pointNface);
@@ -92,10 +93,12 @@ vectorField fieldOperations::getWallPointMotion(const fvMesh& mesh, const volSca
   // normalize point normals to 1
   forAll(motionN, ii) motionN[ii]/=mag(motionN[ii]);
   
-  return (l_T*motionC*motionN);
+  return motionC*motionN;
 }
 
-scalar fieldOperations::getScalingAreaT0(){
+scalar fieldOperations::
+getScalingAreaT0()
+{
   if( !areaAtT0calculated ){
     Foam::Time timeTmp(Foam::Time::controlDictName, args_);
     Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args_);
@@ -103,13 +106,13 @@ scalar fieldOperations::getScalingAreaT0(){
 
     Foam::fvMesh meshTmp
     (
-        Foam::IOobject
-        (
-            Foam::fvMesh::defaultRegion,
-            timeTmp.timeName(),
-            timeTmp,
-            Foam::IOobject::MUST_READ
-        )
+      Foam::IOobject
+      (
+        Foam::fvMesh::defaultRegion,
+        timeTmp.timeName(),
+        timeTmp,
+        Foam::IOobject::MUST_READ
+      )
     );
 
     if( timeTmp.timeName()!="0" ){
@@ -118,16 +121,15 @@ scalar fieldOperations::getScalingAreaT0(){
               <<exit(FatalError);
     }
 
-    //const surfaceScalarField& magSf2 = meshTmp.magSf();
-    //scalingAreaT0 = gSum( magSf2.boundaryField()[scalingPatchID_] );
-    
     scalingAreaT0 = getScalingArea(meshTmp);
     areaAtT0calculated = true;
   }
   return scalingAreaT0;
 }
 
-scalar fieldOperations::getScalingArea(const fvMesh& mesh){
+scalar fieldOperations::
+getScalingArea(const fvMesh& mesh)
+{
   const surfaceScalarField& magSf = mesh.magSf();
   return gSum( magSf.boundaryField()[scalingPatchID_] );
 }

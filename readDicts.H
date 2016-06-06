@@ -1,5 +1,3 @@
-  // reading dissolFoam dictionary
-
   Info << "Reading dissolFoam flags" << nl;
   
   const word dissolDictName("dissolFoamDict");
@@ -67,23 +65,12 @@
           << exit(FatalError);
   }
 
-  /*
-  bool limitFlux = false;
-  if( !constFlux ){
-    if( !dissolProperties.readIfPresent<bool>("limitFlux", limitFlux) ){
-      SeriousErrorIn("main")
-            << "There is no limitFlux parameter in dissolFoam dictionary"
-            << exit(FatalError);
-    }
-  }
-  */
   scalar limitValue = 1.0;
   if( !dissolProperties.readIfPresent<scalar>("limitValue", limitValue) ){
     SeriousErrorIn("main")
           << "There is no limitValue parameter in dissolFoam dictionary"
           << exit(FatalError);
   }
-
 
   Info << "Reading transportProperties" << nl;
 
@@ -109,7 +96,7 @@
       transportProperties.lookup("D")
   );
 
-  scalar l_T;                                        // l_T=D/(k*l)
+  scalar l_T;                  // l_T=D/(k*h0)
   if( !transportProperties.readIfPresent<scalar>("l_T", l_T) ){
     SeriousErrorIn("main")
         << "There is no l_T parameter in transportProperties dictionary"
@@ -120,13 +107,13 @@
 
   dictionary convDiff = mesh.solutionDict().subDict("convDiff");
 
-  double convCrit = 0;              // convergence criteria
+  double convCrit = 0;         // convergence criteria for convection-diffusion
   if( !convDiff.readIfPresent<double>("convergence", convCrit) ){
     SeriousErrorIn("main")
         << "No convergence parameter in convDiff subdictionary"
         << exit(FatalError);
   }
-  int maxIter = 0;                  // maximum number of iterations
+  int maxIter = 0;             // maximum number of iterations
   if( !convDiff.readIfPresent<int>("maxIter", maxIter) ){
     SeriousErrorIn("main")
         << "No maxIter parameter in convDiff subdictionary"
@@ -135,17 +122,16 @@
 
 
   Info << "***************************************************" << nl;
-  Info << "transportProperties, nu:    " << nu         << nl;
-  Info << "transportProperties, D:     " << D          << nl;
-  Info << "transportProperties, l_T:   " << l_T        << nl;
-  Info << "dissolFoamDict, inertia:    " << inertia    << nl;
-  Info << "dissolFoamDict, rescale:    " << rescale    << nl;
-  Info << "dissolFoamDict, scaleRlxr:  " << rescaleRelaxPar << nl;
-  Info << "dissolFoamDict, constFlux:  " << constFlux  << nl;
-  //Info << "dissolFoamDict, limitFlux:  " << limitFlux  << nl;
-  Info << "dissolFoamDict, limitValue: " << limitValue << nl;
-  Info << "dissolFoamDict, gradCWrite: " << gradCWrite << nl;
-  Info << "fvSolutions, convCrit:      " << convCrit   << nl;
-  Info << "fvSolutions, maxIter:       " << maxIter    << nl;
+  Info << "transportProperties, nu:    " << nu                  << nl;
+  Info << "transportProperties, D:     " << D                   << nl;
+  Info << "transportProperties, l_T:   " << l_T                 << nl;
+  Info << "dissolFoamDict, inertia:    " << inertia             << nl;
+  Info << "dissolFoamDict, rescale:    " << rescale             << nl;
+  Info << "dissolFoamDict, scaleRlxr:  " << rescaleRelaxPar     << nl;
+  Info << "dissolFoamDict, constFlux:  " << constFlux           << nl;
+  Info << "dissolFoamDict, limitValue: " << limitValue          << nl;
+  Info << "dissolFoamDict, gradCWrite: " << gradCWrite          << nl;
+  Info << "fvSolutions, convCrit:      " << convCrit            << nl;
+  Info << "fvSolutions, maxIter:       " << maxIter             << nl;
   Info << "***************************************************" << endl;
 

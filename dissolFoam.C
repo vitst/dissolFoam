@@ -27,36 +27,22 @@ Application
 Description
     Solves for flow (Stokes) and transport (steady-state) and moves
     the mesh according to the reactant flux.
+ 
+    Works with OpenFOAM 2.x.x.
 \*---------------------------------------------------------------------------*/
-
-// OF includes
 
 // common and simpleFoam
 #include "fvCFD.H"
-
-// simpleFoam
-//#include "fvIOoptionList.H"
 
 // OF
 #include "pointPatchField.H"
 #include "dynamicFvMesh.H"
 #include "syncTools.H"
 
-// dissol project
+// dissolFOAM project
 #include "steadyStateControl.H"
 #include "meshRelax.H"
 #include "fieldOperations.H"
-
-// auxiliary: includes mesh search
-#include "interpolation.H"
-#include "triSurface.H"
-#include "triSurfaceTools.H"
-#include "triSurfaceSearch.H"
-#include "meshSearch.H"
-
-// interpolation and tables
-#include "interpolationTable.H"
-#include "memInfo.H"
 
 /*######################################################################
  *    Main program body
@@ -66,7 +52,7 @@ Description
  *           <------ outlet ------>
  *        ||                         |          |
  *        ||                         |          |
- *        ||<----- walls             |          |
+ *        ||<------- walls           |          |
  *        ||                         |          |
  * z     /  \                   z    |          |
  * |_ y      <------ inlet -->  |_ x
@@ -79,11 +65,6 @@ Description
  *        maxIter                     2000;
  *      }
  *
- * @TODO
- * - create all the lists for time 0
- * - check the parameter preservePatches for cyclic BC
- * - make mesh relax independent on the inletID and outletID
- * 
  #####################################################################*/
 
 int main(int argc, char *argv[])
@@ -92,32 +73,22 @@ int main(int argc, char *argv[])
   #include "createTime.H"
   #include "createDynamicFvMesh.H"
 
-  // OF simpleFoam  
-  //#include "createFvOptions.H" 
-  
   #include "readDicts.H"
   #include "createFields.H"
 
-  // Get patch ID for moving boundaries ("walls" "inlet")
-  const label wallID  = mesh.boundaryMesh().findPatchID("walls");
-  //const label inletID = mesh.boundaryMesh().findPatchID("inlet");
-  const label outletID = mesh.boundaryMesh().findPatchID("outlet");
+  // Get patch ID for moving boundaries ("walls")
+  const label patchMotion  = mesh.boundaryMesh().findPatchID("walls");
+  // Get patch ID for scaling flow rate
+  const label patchScaling = mesh.boundaryMesh().findPatchID("outlet");
   
   meshRelax mesh_rlx(mesh, args);
   Info << "Setup mesh relaxation object. meshRelax version is "
           << mesh_rlx.get_version() << endl;
 
-  fieldOperations fieldOp(args, outletID);
+  fieldOperations fieldOp(args, patchScaling);
   Info << "Setup field operation object" << endl;
   
-  Info<<"Patch \""<<mesh.boundaryMesh().names()[outletID]<<"\" is used for scaling U"<<nl;
-  
-  //const scalar scalingAreaT0 = fieldOp.getScalingAreaT0();
-  Info << "Initial patch area for the flow rate scaling: " 
-          << fieldOp.getScalingAreaT0() << nl;
-  Info << "U field is scaled so that <U_inlet> = 1 at t=0" << nl;
-  Info << "phi field is unscaled" << nl
-       << "Used to recover scale factor after restart" << endl;
+  Info<<"Patch \""<<mesh.boundaryMesh().names()[patchScaling]<<"\" is used for scaling U"<<nl;
   
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
 
@@ -137,11 +108,11 @@ int main(int argc, char *argv[])
 // *    Mesh motion & relaxation
 // *********************************************************
 
-      // calculate mesh motion
-      vectorField pointDispWall = 
-            fieldOp.getWallPointMotion(mesh, C, l_T, wallID);
+      // calculate mesh motion 
+      vectorField pointDisplacement = 
+            l_T * fieldOp.getWallPointMotion(mesh, C, patchMotion);
       
-      mesh_rlx.meshUpdate(pointDispWall, runTime);
+      mesh_rlx.meshUpdate(pointDisplacement, runTime);
       
       Info << "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
            << " s" << "  ClockTime = " << runTime.elapsedClockTime()
@@ -155,34 +126,24 @@ int main(int argc, char *argv[])
     steadyStateControl simple(mesh);
     while ( simple.loop() )
     {
-      //Info << "Simple" << nl;
       if(inertia)
       {
-        //Info << "Inertia" << nl;
         #include "UEqn.H"        // Navier Stokes
         #include "pEqn.H"
       }
       else
       {
-        //Info << "Stockes" << nl;
         #include "UEqnStokes.H"  // Stokes
         #include "pEqn.H"
       }
       
       if(rescale){
         scalar Q = fieldOp.getScalingFlowRate(phi);
+        
+        scalar compareTo = (constFlux) ? SMALL : limitValue;
 
-        scalar scaleFactor = 1.0;
+        scalar scaleFactor = ( Q > compareTo ) ? limitValue / Q : 1.0;
                 
-        if(constFlux)
-        {
-          if(Q>SMALL) scaleFactor = limitValue / Q;
-        }
-        else
-        {
-          if(Q>limitValue) scaleFactor = limitValue / Q;
-        }
-
         // apply relaxation parameter to the scaling factor
         scaleFactor = 1 + rescaleRelaxPar * (scaleFactor - 1);
         
@@ -192,88 +153,53 @@ int main(int argc, char *argv[])
                 <<Q
                 <<nl;
         
-        p   == scaleFactor * p;
-        U   == scaleFactor * U;
+        p == scaleFactor * p;
+        U == scaleFactor * U;
       }
     }
     
     Info<< "Final flow rate: "<<fieldOp.getScalingFlowRate(phi)<<nl<<nl;
 
-    Info << "Flow solver: "
-    << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
-    <<"ClockTime = "<< runTime.elapsedClockTime() << " s"
-    << nl << nl << endl;
-
-/*###############################################
- *   Scale U and phi (using outlet value)
- *   constFlux == true  -> constant flow rate
- *   constFlux == false -> constant pressure drop
- * 
- *   limitFlux == true  -> limit a flow rate in case of
- *                         constant pressure drop
- *   limitValue = 3.0   -> limit a flow rate to 3.0 * rate at time 0
- *###############################################*/
-    /*
-    scalar Q  = fieldOp.getScalingFlowRate(phi)  ;
-    scalar Q0 = fieldOp.getScalingFlowRateT0(phi);
-    scalar A0 = fieldOp.getScalingAreaT0();
-    
-    scalar nU = 1.0;
-    if(rescale && !inertia)
-      nU = Q0/A0;
-      
-    if(constFlux)
-    {
-      nU *= Q / Q0;
-    }
-    else
-    {
-      if(limitFlux && Q > Q0*limitValue)
-        nU *= Q / (Q0*limitValue);
-    }
-    */
-      
-    //scalar nU = Q / Q0;
-    //Info << "U and phi scale factor: " << nU << "   Q: "<< Q << nl << endl;
-
-    //U   == U   / nU;
-    //phi == phi / nU;
+    Info<< "Flow solver: "
+        << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
+        << "ClockTime = "<< runTime.elapsedClockTime() << " s"
+        << nl << nl << endl;
 
 /*############################################
  *   Steady-state convection-diffusion solver
  *##########################################*/
 
-  Info << "Steady-state concentration solver"<< endl;
+    Info << "Steady-state concentration solver"<< endl;
 
-  int iter = 0;
-  while ( true ){
-    iter++;
-    
-    double residual = solve
-    (
-      fvm::div(phi, C) - fvm::laplacian(D, C)
-    ).initialResidual();
-    
-    if( residual < convCrit ){
-      Info << "Convection-diffusion: "
-           << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
-           << "ClockTime = " << runTime.elapsedClockTime() << " s" <<nl 
-           << "Converged in " << iter << " steps.  Residual="<< residual
-           << nl << endl;
+    int iter = 0;
+    while ( true ){
+      iter++;
 
-      if(iter >= maxIter){
-        Info << nl << "dissolFoam Runtime WARNING:"
-             << "Convection-diffusion solver did not converge." << nl
-             <<"Maximum number of iterations"
-             <<"  iter: "<< iter << endl;
+      double residual = solve
+      (
+        fvm::div(phi, C) - fvm::laplacian(D, C)
+      ).initialResidual();
+
+      if( residual < convCrit ){
+        Info << "Convection-diffusion: "
+             << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
+             << "ClockTime = " << runTime.elapsedClockTime() << " s" <<nl 
+             << "Converged in " << iter << " steps.  Residual="<< residual
+             << nl << endl;
+
+        if(iter >= maxIter){
+          Info << nl << "dissolFoam Runtime WARNING:"
+               << "Convection-diffusion solver did not converge." << nl
+               << "Maximum number of iterations"
+               << "  iter: "<< iter << endl;
+        }
+        break;
       }
-      break;
+      else{
+        Info << " Step " << iter
+             << " residual: "<< residual << " > " << convCrit << endl;
+      }
     }
-    else{
-      Info << " Step " << iter
-           << " residual: "<< residual << " > " << convCrit << endl;
-    }
-  }
   
 // *********************************************************
 // *    Write Output data
@@ -281,15 +207,9 @@ int main(int argc, char *argv[])
 
     if(gradCWrite) gradC == -fvc::snGrad(C);
     
-    // Rescale phi for restart and for next cycle
-    //phi == phi * nU;
-
     Info << "Write fields: Time = " << runTime.timeName() << nl <<endl;
     (runTimeIs0) ? runTime.writeNow() : runTime.write();
     runTimeIs0 = false;
-
-    // Rescale U for next cycle
-    //U == U * nU;
   }
 
   Info << "End" << endl;
