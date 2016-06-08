@@ -28,13 +28,19 @@
           << exit(FatalError);
   }
   
-  if(inertia)
+  bool rescale;
+  if( !dissolProperties.readIfPresent<bool>("rescale", rescale) ){
+    SeriousErrorIn("main")
+          << "There is no rescale parameter in dissolFoam dictionary"
+          << exit(FatalError);
+  }
+  
+  if(!rescale)
   {
     Info<<nl<<"**************************************************************"<<nl;
     Info<<nl<<"!!!! Warning !!!!"<<nl;
     WarningIn("readDicts.H")
-            << "The 'inertia' parameter is set to 'true', which means\n"
-            "the Navier-Stokes flow will be used instead of the Stokes flow.\n"
+            << "The 'rescale' parameter is set to 'false', which means\n"
             "The U and phi fields will not be rescaled. User should specify\n"
             "a pressure difference as 0 at the inlet and A*nu*L at the outlet,\n"
             "where nu is the kinematic viscosity from transportProperties file;\n"
@@ -43,13 +49,6 @@
     Info<<"**************************************************************"<<nl<<nl;
   }
     
-  bool rescale;
-  if( !dissolProperties.readIfPresent<bool>("rescale", rescale) ){
-    SeriousErrorIn("main")
-          << "There is no rescale parameter in dissolFoam dictionary"
-          << exit(FatalError);
-  }
-  
   scalar rescaleRelaxPar;
   if( !dissolProperties.readIfPresent<scalar>("rescaleRelaxPar", rescaleRelaxPar) ){
     SeriousErrorIn("main")
