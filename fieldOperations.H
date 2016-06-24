@@ -52,15 +52,6 @@ private:
   const argList args_;
   const label scalingPatchID_;
   
-  // aux. parameter in order to calculate flow rate for scaling at t0 only once
-  bool flowRateAtT0calculated;
-  // aux. parameter where we store flow rate at t=0
-  scalar scalingFlowRateT0;
-  // aux. parameter in order to calculate flow rate for scaling at t0 only once
-  bool areaAtT0calculated;
-  // aux. parameter where we store area of the patch for scaling at t=0
-  scalar scalingAreaT0;
-  
 public:
   
   // Constractors
@@ -70,11 +61,8 @@ public:
   // member functions
   vectorField getWallPointMotion(const fvMesh&, const volScalarField&, const label);
   
-  scalar getScalingFlowRateT0(const surfaceScalarField&);
-  scalar getScalingFlowRate(const surfaceScalarField&);
-
-  scalar getScalingAreaT0(); // returns the area of the patch at time 0
-  scalar getScalingArea(const fvMesh&);   // returns the current area of the patch
+  scalar getScalingArea(const fvMesh&);                 // patch Area
+  scalar getScalingFlowRate(const surfaceScalarField&); // patch Flux
 };
 
 

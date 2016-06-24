@@ -137,33 +137,22 @@ int main(int argc, char *argv[])
         #include "pEqn.H"
       }
       
-      if(rescale){
+      if(limitFlux){
         scalar Q = fieldOp.getScalingFlowRate(phi);
-        
         scalar compareTo = (constFlux) ? SMALL : limitValue;
-
         scalar scaleFactor = ( Q > compareTo ) ? limitValue / Q : 1.0;
                 
-        // apply relaxation parameter to the scaling factor
-        scaleFactor = 1 + rescaleRelaxPar * (scaleFactor - 1);
-        
-        Info<<"Rescaling p and U fields. scaleFactor="
-                <<scaleFactor
-                <<"  flow rate Q="
-                <<Q
-                <<nl;
-        
         p == scaleFactor * p;
         U == scaleFactor * U;
       }
     }
     
-    Info<< "Final flow rate: "<<fieldOp.getScalingFlowRate(phi)<<nl<<nl;
+    Info << "Final flow rate: " << fieldOp.getScalingFlowRate(phi)<<nl<<nl;
 
-    Info<< "Flow solver: "
-        << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
-        << "ClockTime = "<< runTime.elapsedClockTime() << " s"
-        << nl << nl << endl;
+    Info << "Flow solver: "
+         << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
+         << "ClockTime = "<< runTime.elapsedClockTime() << " s"
+         << nl << nl << endl;
 
 /*############################################
  *   Steady-state convection-diffusion solver
@@ -205,7 +194,7 @@ int main(int argc, char *argv[])
 // *    Write Output data
 // *********************************************************
 
-    if(gradCWrite) gradC == -fvc::snGrad(C);
+    if(gradCWrite) gradC == -fvc::snGrad(C)*mesh.magSf();
     
     Info << "Write fields: Time = " << runTime.timeName() << nl <<endl;
     (runTimeIs0) ? runTime.writeNow() : runTime.write();

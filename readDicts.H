@@ -28,35 +28,24 @@
           << exit(FatalError);
   }
   
-  bool rescale;
-  if( !dissolProperties.readIfPresent<bool>("rescale", rescale) ){
+  bool limitFlux;
+  if( !dissolProperties.readIfPresent<bool>("limitFlux", limitFlux) ){
     SeriousErrorIn("main")
-          << "There is no rescale parameter in dissolFoam dictionary"
+          << "There is no limitFlux parameter in dissolFoam dictionary"
           << exit(FatalError);
   }
   
-  if(!rescale)
+  if(limitFlux)
   {
-    Info<<nl<<"**************************************************************"<<nl;
-    Info<<nl<<"!!!! Warning !!!!"<<nl;
-    WarningIn("readDicts.H")
-            << "The 'rescale' parameter is set to 'false', which means\n"
-            "The U and phi fields will not be rescaled. User should specify\n"
-            "a pressure difference as 0 at the inlet and A*nu*L at the outlet,\n"
-            "where nu is the kinematic viscosity from transportProperties file;\n"
-            "L is a length of the fracture and A is a geometric parameter\n"
-            "(12 in case of two parallel plates)."<<nl;
-    Info<<"**************************************************************"<<nl<<nl;
+    Info << nl << "**************************************************************" << nl;
+    Info << "Warning!\n"
+            "The 'limitFlux' parameter is set to 'true'.\n"
+            "U and phi fields will be rescaled so the outlet flux does not\n"
+            "exceed limitValue.\n"
+            "If 'constFlux' is also 'true' the flow is always rescaled.\n" << nl;
+    Info << "**************************************************************" << nl << nl;
   }
     
-  scalar rescaleRelaxPar;
-  if( !dissolProperties.readIfPresent<scalar>("rescaleRelaxPar", rescaleRelaxPar) ){
-    SeriousErrorIn("main")
-          << "There is no rescaleRelaxPar parameter in dissolFoam dictionary"
-          << exit(FatalError);
-  }
-  
-
   bool constFlux;
   if( !dissolProperties.readIfPresent<bool>("constFlux", constFlux) ){
     SeriousErrorIn("main")
@@ -125,8 +114,7 @@
   Info << "transportProperties, D:     " << D                   << nl;
   Info << "transportProperties, l_T:   " << l_T                 << nl;
   Info << "dissolFoamDict, inertia:    " << inertia             << nl;
-  Info << "dissolFoamDict, rescale:    " << rescale             << nl;
-  Info << "dissolFoamDict, scaleRlxr:  " << rescaleRelaxPar     << nl;
+  Info << "dissolFoamDict, limitFlux:  " << limitFlux           << nl;
   Info << "dissolFoamDict, constFlux:  " << constFlux           << nl;
   Info << "dissolFoamDict, limitValue: " << limitValue          << nl;
   Info << "dissolFoamDict, gradCWrite: " << gradCWrite          << nl;

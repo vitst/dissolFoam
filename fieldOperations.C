@@ -5,66 +5,23 @@
  */
 
 #include "fieldOperations.H"
-
 #include "coupledPatchInterpolation.H"
+
 
 fieldOperations::
 fieldOperations(const argList& args, const label patchID):
 args_(args),
 scalingPatchID_(patchID)
-{
-  flowRateAtT0calculated = false;
-  scalingFlowRateT0 = 0.0;
-  
-  areaAtT0calculated = false;
-  scalingAreaT0 = 1.0;
-}
+{}
 
 
 scalar fieldOperations::
-getScalingFlowRateT0(const surfaceScalarField& phi)
+getScalingArea(const fvMesh& mesh)
 {
-  if( !flowRateAtT0calculated ){
-    Foam::Time timeTmp(Foam::Time::controlDictName, args_);
-    Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args_);
-    timeTmp.setTime(timeDirs[0], 0);
-
-    Foam::fvMesh meshTmp
-    (
-      Foam::IOobject
-      (
-        Foam::fvMesh::defaultRegion,
-        timeTmp.timeName(),
-        timeTmp,
-        Foam::IOobject::MUST_READ
-      )
-    );
-
-    surfaceScalarField phiTmp
-    (
-      IOobject
-      (
-        "phi",
-        timeTmp.timeName(),
-        meshTmp,
-        IOobject::READ_IF_PRESENT,
-        IOobject::NO_WRITE
-      ),
-      phi
-    );
-    
-    // in case 0 time does not exist
-    if( timeTmp.timeName()!="0" ){
-      SeriousErrorIn("fieldOperations::getInletFlowRateT0")
-              <<"There is no 0 time directory. Check your decomposition as well!"
-              <<exit(FatalError);
-    }
-  
-    scalingFlowRateT0 = getScalingFlowRate(phiTmp);
-    flowRateAtT0calculated = true;
-  }
-  return scalingFlowRateT0;
+  const surfaceScalarField& magSf = mesh.magSf();
+  return gSum( magSf.boundaryField()[scalingPatchID_] );
 }
+
 
 scalar fieldOperations::
 getScalingFlowRate(const surfaceScalarField& phi)
@@ -96,40 +53,3 @@ getWallPointMotion(const fvMesh& mesh, const volScalarField& C,
   return motionC*motionN;
 }
 
-scalar fieldOperations::
-getScalingAreaT0()
-{
-  if( !areaAtT0calculated ){
-    Foam::Time timeTmp(Foam::Time::controlDictName, args_);
-    Foam::instantList timeDirs = Foam::timeSelector::select0(timeTmp, args_);
-    timeTmp.setTime(timeDirs[0], 0);
-
-    Foam::fvMesh meshTmp
-    (
-      Foam::IOobject
-      (
-        Foam::fvMesh::defaultRegion,
-        timeTmp.timeName(),
-        timeTmp,
-        Foam::IOobject::MUST_READ
-      )
-    );
-
-    if( timeTmp.timeName()!="0" ){
-      SeriousErrorIn("fieldOperations::getScalingAreaT0")
-              <<"There is no 0 time directory. Check your decomposition as well!"
-              <<exit(FatalError);
-    }
-
-    scalingAreaT0 = getScalingArea(meshTmp);
-    areaAtT0calculated = true;
-  }
-  return scalingAreaT0;
-}
-
-scalar fieldOperations::
-getScalingArea(const fvMesh& mesh)
-{
-  const surfaceScalarField& magSf = mesh.magSf();
-  return gSum( magSf.boundaryField()[scalingPatchID_] );
-}
