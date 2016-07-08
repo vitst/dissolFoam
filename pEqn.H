@@ -1,7 +1,8 @@
 {
-    volScalarField rAU(1.0/UEqn().A());
-    volVectorField HbyA("HbyA", U);
-    HbyA = rAU*UEqn().H();
+    volScalarField rAU(1.0/UEqn.A());
+    //volVectorField HbyA("HbyA", U);
+    volVectorField HbyA(constrainHbyA(rAU*UEqn.H(), U, p));
+    //HbyA = rAU*UEqn().H();
 
     surfaceScalarField phiHbyA("phiHbyA", fvc::interpolate(HbyA) & mesh.Sf());
 //    MRF.makeRelative(phiHbyA);
@@ -9,17 +10,17 @@
 
     tmp<volScalarField> rAtU(rAU);
     
-    Info<< "Is simple cons. "<<simple.consistent()<<nl;
+    //Info<< "Is simple cons. "<<simple.consistent()<<nl;
 
     if (simple.consistent())
     {
-        rAtU = 1.0/(1.0/rAU - UEqn().H1());
+        rAtU = 1.0/(1.0/rAU - UEqn.H1());
         phiHbyA +=
             fvc::interpolate(rAtU() - rAU)*fvc::snGrad(p)*mesh.magSf();
         HbyA -= (rAU - rAtU())*fvc::grad(p);
     }
 
-    UEqn.clear();
+    tUEqn.clear();
 
     // Non-orthogonal pressure corrector loop
     while (simple.correctNonOrthogonal())

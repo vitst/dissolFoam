@@ -1,10 +1,11 @@
 // Momentum predictor. Stokes.
 
-tmp<fvVectorMatrix> UEqn
+tmp<fvVectorMatrix> tUEqn
 (
   -  fvm::laplacian(nu, U)
 );
 
-UEqn().relax();
+fvVectorMatrix& UEqn = tUEqn.ref();
+UEqn.relax();
 
-solve(UEqn() == -fvc::grad(p));
+solve(UEqn == -fvc::grad(p));

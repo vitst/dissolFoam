@@ -2,7 +2,7 @@
 
     //MRF.correctBoundaryVelocity(U);
 
-    tmp<fvVectorMatrix> UEqn
+    tmp<fvVectorMatrix> tUEqn
     (
         fvm::div(phi, U)
      -  fvm::laplacian(nu, U)
@@ -13,10 +13,11 @@
 //        fvOptions(U)
     );
 
-    UEqn().relax();
+    fvVectorMatrix& UEqn = tUEqn.ref();
+		UEqn.relax();
 
 //    fvOptions.constrain(UEqn());
 
-    solve(UEqn() == -fvc::grad(p));
+    solve(UEqn == -fvc::grad(p));
 
 //    fvOptions.correct(U);
