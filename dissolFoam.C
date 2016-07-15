@@ -88,7 +88,8 @@ int main(int argc, char *argv[])
   fieldOperations fieldOp(args, patchScaling);
   Info << "Setup field operation object" << endl;
   
-  Info<<"Patch \""<<mesh.boundaryMesh().names()[patchScaling]<<"\" is used for scaling U"<<nl;
+  Info<<"Patch \""<<mesh.boundaryMesh().names()[patchScaling]
+          <<"\" is used for scaling U"<<nl;
   
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
 
