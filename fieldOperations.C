@@ -31,8 +31,12 @@ getScalingFlowRate(const surfaceScalarField& phi)
 
 
 vectorField fieldOperations::
-getWallPointMotion(const fvMesh& mesh, const volScalarField& C, 
-                   const label movingPatchID)
+getWallPointMotion
+(
+  const fvMesh& mesh,
+  const volScalarField& C, 
+  const label movingPatchID
+)
 {
   // interpolate the concentration from cells to wall faces
   coupledPatchInterpolation patchInterpolator

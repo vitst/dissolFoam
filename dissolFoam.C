@@ -44,7 +44,7 @@ Description
 #include "meshRelax.H"
 #include "fieldOperations.H"
 
-/*######################################################################
+/*####################################################################
  *    Main program body
  * 
  * Schematic fracture geometry:
