@@ -155,13 +155,13 @@ int main(int argc, char *argv[])
          << "ClockTime = "<< runTime.elapsedClockTime() << " s"
          << nl << nl << endl;
 
-/*############################################
+/*##########################################
  *   Steady-state convection-diffusion solver
  *##########################################*/
 
     Info << "Steady-state concentration solver"<< endl;
 
-    int iter = 0;
+    int  iter = 0;
     while ( true ){
       iter++;
 
