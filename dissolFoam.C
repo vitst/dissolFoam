@@ -77,13 +77,13 @@ int main(int argc, char *argv[])
   #include "createFields.H"
 
   // Get patch ID for moving boundaries ("walls")
-  const label patchMotion  = mesh.boundaryMesh().findPatchID("walls");
+  //const label patchMotion  = mesh.boundaryMesh().findPatchID("walls");
   // Get patch ID for scaling flow rate
   const label patchScaling = mesh.boundaryMesh().findPatchID("outlet");
   
-  meshRelax mesh_rlx(mesh, args);
-  Info << "Setup mesh relaxation object. meshRelax version is "
-          << mesh_rlx.get_version() << endl;
+  //meshRelax mesh_rlx(mesh, args);
+  //Info << "Setup mesh relaxation object. meshRelax version is "
+  //        << mesh_rlx.get_version() << endl;
 
   fieldOperations fieldOp(args, patchScaling);
   Info << "Setup field operation object" << endl;
@@ -110,11 +110,13 @@ int main(int argc, char *argv[])
 // *********************************************************
 
       // calculate mesh motion 
-      vectorField pointDisplacement = 
-            l_T * fieldOp.getWallPointMotion(mesh, C, patchMotion);
+      //vectorField pointDisplacement = 
+      //      l_T * fieldOp.getWallPointMotion(mesh, C, patchMotion);
       
-      mesh_rlx.meshUpdate(pointDisplacement, runTime);
+      //mesh_rlx.meshUpdate(pointDisplacement, runTime);
       
+      mesh.update();
+      //runTime.write();
       Info << "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
            << " s" << "  ClockTime = " << runTime.elapsedClockTime()
            << " s"<< nl<< endl;
@@ -138,7 +140,8 @@ int main(int argc, char *argv[])
         #include "pEqn.H"
       }
       
-      if(limitFlux){
+      if(limitFlux)
+      {
         scalar Q = fieldOp.getScalingFlowRate(phi);
         scalar compareTo = (constFlux) ? SMALL : limitValue;
         scalar scaleFactor = ( Q > compareTo ) ? limitValue / Q : 1.0;
@@ -162,22 +165,25 @@ int main(int argc, char *argv[])
     Info << "Steady-state concentration solver"<< endl;
 
     int  iter = 0;
-    while ( true ){
+    while ( true )
+    {
       iter++;
 
       double residual = solve
       (
         fvm::div(phi, C) - fvm::laplacian(D, C)
       ).initialResidual();
-
-      if( residual < convCrit ){
+      
+      if( residual < convCrit )
+      {
         Info << "Convection-diffusion: "
              << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
              << "ClockTime = " << runTime.elapsedClockTime() << " s" <<nl 
              << "Converged in " << iter << " steps.  Residual="<< residual
              << nl << endl;
 
-        if(iter >= maxIter){
+        if(iter >= maxIter)
+        {
           Info << nl << "dissolFoam Runtime WARNING:"
                << "Convection-diffusion solver did not converge." << nl
                << "Maximum number of iterations"
