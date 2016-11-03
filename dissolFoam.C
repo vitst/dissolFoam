@@ -120,6 +120,8 @@ int main(int argc, char *argv[])
       Info << "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
            << " s" << "  ClockTime = " << runTime.elapsedClockTime()
            << " s"<< nl<< endl;
+      //runTime++;
+      //runTime.write();
     }
     
 /*###############################################
