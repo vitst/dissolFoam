@@ -91,6 +91,16 @@ int main(int argc, char *argv[])
   Info<<"Patch \""<<mesh.boundaryMesh().names()[patchScaling]
           <<"\" is used for scaling U"<<nl;
   
+  
+  
+  
+  
+//  Info<<nl<<"Patches  "<<mesh.boundaryMesh().names() <<nl;
+  
+  
+//  std::exit(0);
+  
+  
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
 
   runTime.functionObjects().execute();     // Execute cntlDict functions
@@ -120,9 +130,10 @@ int main(int argc, char *argv[])
       Info << "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
            << " s" << "  ClockTime = " << runTime.elapsedClockTime()
            << " s"<< nl<< endl;
-      //runTime++;
-      //runTime.write();
+//      runTime++;
+//      runTime.write();
     }
+    //std::exit(0);
     
 /*###############################################
  *   Steady-state flow solver
