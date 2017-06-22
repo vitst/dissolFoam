@@ -4,7 +4,8 @@
 
     tmp<fvVectorMatrix> tUEqn
     (
-        fvm::div(phi, U)
+        fvm::Sp(Kinv*nu, U)
+     +  fvm::div(phi, U)
      -  fvm::laplacian(nu, U)
     
 //      + MRF.DDt(U)

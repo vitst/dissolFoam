@@ -74,6 +74,11 @@
       )
   );
 
+  dimensionedScalar Kinv
+  (
+      transportProperties.lookup("Kinv")
+  );
+
   dimensionedScalar nu
   (
       transportProperties.lookup("nu")
@@ -84,7 +89,7 @@
       transportProperties.lookup("D")
   );
 
-  scalar l_T;                  // l_T=D/(k*h0)
+  scalar l_T;                  // l_T=D/k
   if( !transportProperties.readIfPresent<scalar>("l_T", l_T) ){
     SeriousErrorIn("main")
         << "There is no l_T parameter in transportProperties dictionary"
@@ -110,6 +115,7 @@
 
 
   Info << "***************************************************" << nl;
+  Info << "transportProperties, Kinv:  " << Kinv                << nl;
   Info << "transportProperties, nu:    " << nu                  << nl;
   Info << "transportProperties, D:     " << D                   << nl;
   Info << "transportProperties, l_T:   " << l_T                 << nl;
