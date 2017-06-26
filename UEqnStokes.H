@@ -2,6 +2,7 @@
 
 tmp<fvVectorMatrix> tUEqn
 (
+     fvm::Sp(Kinv*nu, U)
   -  fvm::laplacian(nu, U)
 );
 
