@@ -43,6 +43,8 @@ Description
 #include "steadyStateControl.H"
 //#include "meshRelax.H"
 #include "fieldOperations.H"
+#include "dissolMotionPointPatchVectorField.H"
+#include "pointPatchField.H"
 
 /*####################################################################
  *    Main program body
@@ -95,10 +97,33 @@ int main(int argc, char *argv[])
   
   
   
-//  Info<<nl<<"Patches  "<<mesh.boundaryMesh().names() <<nl;
+  //Info<<nl<<"Patches  "<<mesh.boundaryMesh().names() <<nl;
+
+
+  /*
+  Info<<"Check access to dissolMotion boundary parameters"<<endl;
+  const label patchMotion  = mesh.boundaryMesh().findPatchID("walls");
+  pointVectorField& pointMotionU = const_cast<pointVectorField&>(
+    mesh.objectRegistry::lookupObject<pointVectorField>( "pointMotionU" )
+  );
+   
+  dissolMotionPointPatchVectorField& dM = 
+      dynamic_cast<dissolMotionPointPatchVectorField&>
+      (
+        const_cast<pointPatchField<vector>&>( pointMotionU.boundaryField()[patchMotion]) 
+      ); 
+ 
+  Info<< "surfaceRlx: "<< dM.getSurfaceRlx()<<nl;
+  dM.setSurfaceRlx(false);
+  Info<< "surfaceRlx: "<< dM.getSurfaceRlx()<<nl;
+
+  Info<< "edgeRlx: "<< dM.getEdgeRlx()<<nl;
+  dM.setEdgeRlx(false);
+  Info<< "edgeRlx: "<< dM.getEdgeRlx()<<nl;
+  */
+
   
-  
-//  std::exit(0);
+//  return 0;
   
   
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
@@ -133,7 +158,9 @@ int main(int argc, char *argv[])
 //      runTime++;
 //      runTime.write();
     }
-    //std::exit(0);
+
+
+//    return 0;
     
 /*###############################################
  *   Steady-state flow solver

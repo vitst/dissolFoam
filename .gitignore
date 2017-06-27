@@ -5,6 +5,9 @@
 lnInclude/
 linux64Gcc*/
 
+# swap files
+*.swp
+
 # Compiled Object files
 *.slo
 *.lo
