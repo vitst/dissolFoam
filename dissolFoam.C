@@ -208,11 +208,20 @@ int main(int argc, char *argv[])
     while ( true )
     {
       iter++;
-
-      double residual = solve
+      
+      tmp<fvScalarMatrix> tCEqn
       (
         fvm::div(phi, C) - fvm::laplacian(D, C)
-      ).initialResidual();
+      );
+      fvScalarMatrix& CEqn = tCEqn.ref();
+      CEqn.relax();
+      double residual = solve( CEqn ).initialResidual();
+
+
+      //double residual = solve
+      //(
+      //  fvm::div(phi, C) - fvm::laplacian(D, C)
+      //).initialResidual();
       
       if( residual < convCrit )
       {

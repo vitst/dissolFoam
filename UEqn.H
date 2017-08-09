@@ -15,7 +15,7 @@
     );
 
     fvVectorMatrix& UEqn = tUEqn.ref();
-		UEqn.relax();
+    UEqn.relax();
 
 //    fvOptions.constrain(UEqn());
 
