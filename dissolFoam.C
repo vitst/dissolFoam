@@ -250,7 +250,8 @@ int main(int argc, char *argv[])
 // *    Write Output data
 // *********************************************************
 
-    if(gradCWrite) gradC == -fvc::snGrad(C)*mesh.magSf();
+    if(gradCWrite)
+        gradC == phi/mag(mesh.Sf())*fvc::interpolate(C) - D*fvc::snGrad(C);
     
     Info << "Write fields: Time = " << runTime.timeName() << nl <<endl;
     (runTimeIs0) ? runTime.writeNow() : runTime.write();

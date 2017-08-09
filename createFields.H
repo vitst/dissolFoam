@@ -64,7 +64,7 @@
       gradCWriteOpt
     ),
     mesh,
-    dimensionedScalar("gradC", dimensionSet(0,1,0,0,0,0,0), scalar(0))
+    dimensionedScalar("gradC", dimensionSet(0,1,-1,0,0,0,0), scalar(0))
   );
 
   # include "createPhi.H"
