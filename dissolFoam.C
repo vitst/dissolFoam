@@ -25,11 +25,13 @@ Application
     dissolFoam
 
 Description
-    Solves for steady flow (Stokes or inertial) and transport
+    Solves for steady flow (Stokes or inertial) and reactant transport
     dissolMotion boundary condition nmoves the mesh according to the
-    reactant flux.
+    reactant flux
  
-    Works with OpenFOAM 4.x and v1706
+    Works with official and extended versions of OpenFOAM
+    Currently: 4.x and v1706    8/13/2017
+
 \*---------------------------------------------------------------------------*/
 
 // common and simpleFoam
@@ -42,8 +44,6 @@ Description
 
 // dissolFoam project
 #include "steadyStateControl.H"
-//#include "meshRelax.H"
-#include "fieldOperations.H"
 #include "dissolMotionPointPatchVectorField.H"
 #include "pointPatchField.H"
 
@@ -79,52 +79,7 @@ int main(int argc, char *argv[])
   #include "readDicts.H"
   #include "createFields.H"
 
-  // Get patch ID for moving boundaries ("walls")
-  //const label patchMotion  = mesh.boundaryMesh().findPatchID("walls");
-  // Get patch ID for scaling flow rate
-  const label patchScaling = mesh.boundaryMesh().findPatchID("outlet");
-  
-  //meshRelax mesh_rlx(mesh, args);
-  //Info << "Setup mesh relaxation object. meshRelax version is "
-  //        << mesh_rlx.get_version() << endl;
-
-  fieldOperations fieldOp(args, patchScaling);
-  Info << "Setup field operation object" << endl;
-  
-  Info<<"Patch \""<<mesh.boundaryMesh().names()[patchScaling]
-          <<"\" is used for scaling U"<<nl;
-  
-  
-  
-  
-  
-  //Info<<nl<<"Patches  "<<mesh.boundaryMesh().names() <<nl;
-
-
-  /*
-  Info<<"Check access to dissolMotion boundary parameters"<<endl;
-  const label patchMotion  = mesh.boundaryMesh().findPatchID("walls");
-  pointVectorField& pointMotionU = const_cast<pointVectorField&>(
-    mesh.objectRegistry::lookupObject<pointVectorField>( "pointMotionU" )
-  );
-   
-  dissolMotionPointPatchVectorField& dM = 
-      dynamic_cast<dissolMotionPointPatchVectorField&>
-      (
-        const_cast<pointPatchField<vector>&>( pointMotionU.boundaryField()[patchMotion]) 
-      ); 
- 
-  Info<< "surfaceRlx: "<< dM.getSurfaceRlx()<<nl;
-  dM.setSurfaceRlx(false);
-  Info<< "surfaceRlx: "<< dM.getSurfaceRlx()<<nl;
-
-  Info<< "edgeRlx: "<< dM.getEdgeRlx()<<nl;
-  dM.setEdgeRlx(false);
-  Info<< "edgeRlx: "<< dM.getEdgeRlx()<<nl;
-  */
-
-  
-//  return 0;
+  const label patchID = mesh.boundaryMesh().findPatchID("outlet");
   
   
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
@@ -145,23 +100,12 @@ int main(int argc, char *argv[])
 // *    Mesh motion & relaxation
 // *********************************************************
 
-      // calculate mesh motion 
-      //vectorField pointDisplacement = 
-      //      l_T * fieldOp.getWallPointMotion(mesh, C, patchMotion);
-      
-      //mesh_rlx.meshUpdate(pointDisplacement, runTime);
-      
       mesh.update();
-      //runTime.write();
-      Info << "Mesh update: ExecutionTime = " << runTime.elapsedCpuTime()
-           << " s" << "  ClockTime = " << runTime.elapsedClockTime()
-           << " s"<< nl<< endl;
-//      runTime++;
-//      runTime.write();
+      Info << "Mesh update: ExecutionTime = " 
+           << runTime.elapsedCpuTime() << " s"
+           << "  ClockTime = " << runTime.elapsedClockTime() << " s"
+           << nl<< endl;
     }
-
-
-//    return 0;
     
 /*###############################################
  *   Steady-state flow solver
@@ -183,7 +127,7 @@ int main(int argc, char *argv[])
       
       if(limitFlux)
       {
-        scalar Q = fieldOp.getScalingFlowRate(phi);
+        scalar Q = mag( gSum(phi.boundaryField()[patchID]) );
         scalar compareTo = (constFlux) ? SMALL : Qlim;
         scalar scaleFactor = ( Q > compareTo ) ? Qlim / Q : 1.0;
                 
@@ -192,12 +136,13 @@ int main(int argc, char *argv[])
       }
     }
     
-    Info << "Final flow rate: " << fieldOp.getScalingFlowRate(phi)<<nl<<nl;
+    Info << "Final flow rate: " 
+         << mag( gSum(phi.boundaryField()[patchID]) ) << endl;
 
     Info << "Flow solver: "
          << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
          << "ClockTime = "<< runTime.elapsedClockTime() << " s"
-         << nl << nl << endl;
+         << nl << endl;
 
 /*##########################################
  *   Steady-state convection-diffusion solver
@@ -223,9 +168,9 @@ int main(int argc, char *argv[])
       {
         Info << "Convection-diffusion: "
              << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
-             << "ClockTime = " << runTime.elapsedClockTime() << " s" <<nl 
-             << "Converged in " << iter << " steps.  Residual="<< residual
-             << nl << endl;
+             << "ClockTime = " << runTime.elapsedClockTime() << " s "
+             << nl << "Converged in " << iter << " steps.  Residual = "
+             << residual << nl << endl;
 
         if(iter >= maxIter)
         {
@@ -247,9 +192,10 @@ int main(int argc, char *argv[])
 // *********************************************************
 
     if(writeFluxC)
-        fluxC == phi/mag(mesh.Sf())*fvc::interpolate(C) - D*fvc::snGrad(C);
+        fluxC == phi/mag(mesh.Sf())*fvc::interpolate(C)
+               - D*fvc::snGrad(C);
     
-    Info << "Write fields: Time = " << runTime.timeName() << nl <<endl;
+    Info << "Write fields: Time = " << runTime.timeName() << nl << endl;
     (runTimeIs0) ? runTime.writeNow() : runTime.write();
     runTimeIs0 = false;
   }
