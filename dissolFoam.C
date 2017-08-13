@@ -25,10 +25,11 @@ Application
     dissolFoam
 
 Description
-    Solves for flow (Stokes) and transport (steady-state) and moves
-    the mesh according to the reactant flux.
+    Solves for steady flow (Stokes or inertial) and transport
+    dissolMotion boundary condition nmoves the mesh according to the
+    reactant flux.
  
-    Works with OpenFOAM 2.x.x.
+    Works with OpenFOAM 4.x and v1706
 \*---------------------------------------------------------------------------*/
 
 // common and simpleFoam
@@ -39,7 +40,7 @@ Description
 #include "dynamicFvMesh.H"
 #include "syncTools.H"
 
-// dissolFOAM project
+// dissolFoam project
 #include "steadyStateControl.H"
 //#include "meshRelax.H"
 #include "fieldOperations.H"
@@ -63,7 +64,7 @@ Description
  * 
  *      convDiff
  *      {
- *        convergence                 1e-9;
+ *        tolerance                   1e-9;
  *        maxIter                     2000;
  *      }
  *
@@ -183,8 +184,8 @@ int main(int argc, char *argv[])
       if(limitFlux)
       {
         scalar Q = fieldOp.getScalingFlowRate(phi);
-        scalar compareTo = (constFlux) ? SMALL : limitValue;
-        scalar scaleFactor = ( Q > compareTo ) ? limitValue / Q : 1.0;
+        scalar compareTo = (constFlux) ? SMALL : Qlim;
+        scalar scaleFactor = ( Q > compareTo ) ? Qlim / Q : 1.0;
                 
         p == scaleFactor * p;
         U == scaleFactor * U;
@@ -208,22 +209,17 @@ int main(int argc, char *argv[])
     while ( true )
     {
       iter++;
-      
-      tmp<fvScalarMatrix> tCEqn
+
+      tmp<fvScalarMatrix> tmpCEqn
       (
         fvm::div(phi, C) - fvm::laplacian(D, C)
       );
-      fvScalarMatrix& CEqn = tCEqn.ref();
+      
+      fvScalarMatrix& CEqn = tmpCEqn.ref();
       CEqn.relax();
       double residual = solve( CEqn ).initialResidual();
 
-
-      //double residual = solve
-      //(
-      //  fvm::div(phi, C) - fvm::laplacian(D, C)
-      //).initialResidual();
-      
-      if( residual < convCrit )
+      if( residual < tolerance )
       {
         Info << "Convection-diffusion: "
              << "ExecutionTime = " << runTime.elapsedCpuTime() << " s "
@@ -242,7 +238,7 @@ int main(int argc, char *argv[])
       }
       else{
         Info << " Step " << iter
-             << " residual: "<< residual << " > " << convCrit << endl;
+             << " residual: "<< residual << " > " << tolerance << endl;
       }
     }
   
@@ -250,8 +246,8 @@ int main(int argc, char *argv[])
 // *    Write Output data
 // *********************************************************
 
-    if(gradCWrite)
-        gradC == phi/mag(mesh.Sf())*fvc::interpolate(C) - D*fvc::snGrad(C);
+    if(writeFluxC)
+        fluxC == phi/mag(mesh.Sf())*fvc::interpolate(C) - D*fvc::snGrad(C);
     
     Info << "Write fields: Time = " << runTime.timeName() << nl <<endl;
     (runTimeIs0) ? runTime.writeNow() : runTime.write();

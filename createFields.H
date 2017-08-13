@@ -48,23 +48,23 @@
   );
 
 
-  Info << "Creating field gradC" << endl;
+  Info << "Creating field fluxC" << endl;
 
-  IOobject::writeOption gradCWriteOpt = 
-          (gradCWrite) ? IOobject::AUTO_WRITE : IOobject::NO_WRITE;
+  IOobject::writeOption writeFluxCOpt = 
+          (writeFluxC) ? IOobject::AUTO_WRITE : IOobject::NO_WRITE;
 
-  surfaceScalarField gradC
+  surfaceScalarField fluxC
   (
     IOobject
     (
-      "gradC",
+      "fluxC",
       runTime.timeName(),
       mesh,
       IOobject::NO_READ,
-      gradCWriteOpt
+      writeFluxCOpt
     ),
     mesh,
-    dimensionedScalar("gradC", dimensionSet(0,1,-1,0,0,0,0), scalar(0))
+    dimensionedScalar("fluxC", dimensionSet(0,1,-1,0,0,0,0), scalar(0))
   );
 
   # include "createPhi.H"
