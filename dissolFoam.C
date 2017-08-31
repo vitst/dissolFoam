@@ -44,7 +44,6 @@ Description
 
 // dissolFoam project
 #include "steadyStateControl.H"
-#include "dissolMotionPointPatchVectorField.H"
 #include "pointPatchField.H"
 
 /*####################################################################
