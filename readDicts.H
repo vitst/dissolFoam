@@ -36,7 +36,7 @@
   if(limitFlux)
     Info << "***************************************************" << nl
          << "'limitFlux' parameter is set to 'true'" << nl
-         << "U & phi fields rescaled if outlet flux exceeds Qlim"
+         << "U & phi fields rescaled if outlet flux exceeds Qlim" << nl
          << "***************************************************" << nl
          << endl;
 

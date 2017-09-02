@@ -44,7 +44,6 @@ Description
 
 // dissolFoam project
 #include "steadyStateControl.H"
-#include "dissolMotionPointPatchVectorField.H"
 #include "pointPatchField.H"
 
 /*####################################################################
@@ -186,7 +185,7 @@ int main(int argc, char *argv[])
              << " residual: "<< residual << " > " << tolerance << endl;
       }
     }
-  
+    
 // *********************************************************
 // *    Write Output data
 // *********************************************************
