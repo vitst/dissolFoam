@@ -95,7 +95,7 @@
       transportProperties.lookup("lR")
   );
 
-  Info << "Reading confDiff subdirectory" << nl;
+  Info << "Reading convDiff subdirectory" << nl;
 
   dictionary convDiff = mesh.solutionDict().subDict("convDiff");
 
