@@ -150,18 +150,18 @@ int main(int argc, char *argv[])
     Info << "Steady-state concentration solver"<< endl;
 
     int  iter = 0;
-    while ( true )
+    while ( iter < maxIter )
     {
-      iter++;
-
-      tmp<fvScalarMatrix> tmpCEqn
+      fvScalarMatrix CEqn
       (
         fvm::div(phi, C) - fvm::laplacian(D, C)
       );
-      
-      fvScalarMatrix& CEqn = tmpCEqn.ref();
       CEqn.relax();
       double residual = solve( CEqn ).initialResidual();
+
+      iter++;
+      Info << " Step " << iter
+           << " residual: "<< residual << " > " << tolerance << endl;
 
       if( residual < tolerance )
       {
@@ -170,19 +170,16 @@ int main(int argc, char *argv[])
              << "ClockTime = " << runTime.elapsedClockTime() << " s "
              << nl << "Converged in " << iter << " steps.  Residual = "
              << residual << nl << endl;
+        break;                                      // Done
+      }
 
-        if(iter >= maxIter)
-        {
+      else if(iter >= maxIter)
+      {
           Info << nl << "dissolFoam Runtime WARNING:"
                << "Convection-diffusion solver did not converge." << nl
                << "Maximum number of iterations"
                << "  iter: "<< iter << endl;
-        }
-        break;
-      }
-      else{
-        Info << " Step " << iter
-             << " residual: "<< residual << " > " << tolerance << endl;
+          exit(1);                                  // No convergence
       }
     }
     
