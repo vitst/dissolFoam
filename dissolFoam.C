@@ -41,10 +41,12 @@ Description
 #include "pointPatchField.H"
 #include "dynamicFvMesh.H"
 #include "syncTools.H"
+#include "vectorIOList.H"
 
 // dissolFoam project
 #include "steadyStateControl.H"
 #include "pointPatchField.H"
+
 
 /*####################################################################
  *    Main program body
@@ -79,6 +81,21 @@ int main(int argc, char *argv[])
   #include "createFields.H"
 
   const label patchID = mesh.boundaryMesh().findPatchID("outlet");
+  
+  /*
+  //vectorField uu(2, vector::one);
+  vectorIOList pMotionU
+  (
+      IOobject
+      (
+          "pMotionU",
+          runTime.timeName(),
+          runTime
+      ),
+      2
+  );
+  */
+    
   
   
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
