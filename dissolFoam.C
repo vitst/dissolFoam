@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
   const label patchID = mesh.boundaryMesh().findPatchID("outlet");
   
   /*
-  //vectorField uu(2, vector::one);
+  int numberFaces = C.boundaryField()[]
   vectorIOList pMotionU
   (
       IOobject
@@ -95,8 +95,6 @@ int main(int argc, char *argv[])
       2
   );
   */
-    
-  
   
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
 
@@ -192,11 +190,10 @@ int main(int argc, char *argv[])
 
       else if(iter >= maxIter)
       {
-          Info << nl << "dissolFoam Runtime WARNING:"
-               << "Convection-diffusion solver did not converge." << nl
-               << "Maximum number of iterations"
-               << "  iter: "<< iter << endl;
-          exit(1);                                  // No convergence
+          Warning << "dissolFoam Runtime WARNING:"
+                  << "Convection-diffusion solver did not converge." << nl
+                  << "Maximum number of iterations"
+                  << "  iter: "<< iter << exit(FatalError); // No convergence
       }
     }
     
