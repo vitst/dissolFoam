@@ -82,20 +82,6 @@ int main(int argc, char *argv[])
 
   const label patchID = mesh.boundaryMesh().findPatchID("outlet");
   
-  /*
-  int numberFaces = C.boundaryField()[]
-  vectorIOList pMotionU
-  (
-      IOobject
-      (
-          "pMotionU",
-          runTime.timeName(),
-          runTime
-      ),
-      2
-  );
-  */
-  
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
 
   runTime.functionObjects().execute();     // Execute cntlDict functions
@@ -139,6 +125,7 @@ int main(int argc, char *argv[])
         #include "pEqn.H"
       }
       
+      // rescaling the flow velocities
       if(limitFlux)
       {
         scalar Q = mag( gSum(phi.boundaryField()[patchID]) );
