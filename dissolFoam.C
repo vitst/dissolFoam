@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
       double residual = solve( CEqn ).initialResidual();
 
       iter++;
-      Info << " Step " << iter
+      Info << " Step " << token::TAB << iter << token::TAB
            << " residual: "<< residual << " > " << tolerance << endl;
 
       if( residual < tolerance )
