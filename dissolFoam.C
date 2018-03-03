@@ -26,11 +26,11 @@ Application
 
 Description
     Solves for steady flow (Stokes or inertial) and reactant transport
-    dissolMotion boundary condition nmoves the mesh according to the
+    normalMotionSlip boundary condition nmoves the mesh according to the
     reactant flux
  
     Works with official and extended versions of OpenFOAM
-    Currently: 4.x and v1706    8/13/2017
+    Currently: 4.x and v1706    Mar 2 2018
 
 \*---------------------------------------------------------------------------*/
 
@@ -47,29 +47,6 @@ Description
 #include "steadyStateControl.H"
 #include "pointPatchField.H"
 
-
-/*####################################################################
- *    Main program body
- * 
- * Schematic fracture geometry:
- * 
- *           <------ outlet ------>
- *        ||                         |          |
- *        ||                         |          |
- *        ||<------- walls           |          |
- *        ||                         |          |
- * z     /  \                   z    |          |
- * |_ y      <------ inlet -->  |_ x
- * 
- * fvSolution has a subdictionary: convDiff, e.g.:
- * 
- *      convDiff
- *      {
- *        tolerance                   1e-9;
- *        maxIter                     2000;
- *      }
- *
- #####################################################################*/
 
 int main(int argc, char *argv[])
 {
@@ -96,9 +73,10 @@ int main(int argc, char *argv[])
            << "    dt = " << runTime.deltaTValue()
            << nl << endl;
 
-// *********************************************************
-// *    Mesh motion & relaxation
-// *********************************************************
+/*###############################################
+ *    Mesh motion & relaxation
+ *    Control parameters in dynamicMeshDict
+ *###############################################*/
 
       mesh.update();
       Info << "Mesh update: ExecutionTime = " 
@@ -109,6 +87,7 @@ int main(int argc, char *argv[])
     
 /*###############################################
  *   Steady-state flow solver
+ *   Control parameters in fvSolution
  *###############################################*/
 
     steadyStateControl simple(mesh);
@@ -147,6 +126,7 @@ int main(int argc, char *argv[])
 
 /*##########################################
  *   Steady-state convection-diffusion solver
+ *   Control parameters in fvSolution
  *##########################################*/
 
     Info << "Steady-state concentration solver"<< endl;
