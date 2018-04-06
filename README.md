@@ -14,4 +14,5 @@ If you use these codes for published work, please cite the following references:
 
 [1] V. Starchenko, C. J. Marra and A. J. C. Ladd, Three-dimensional simulations of fracture dissolution,
 J. Geophys. Res. Solid Earth, 121:6421-6444, 2016.
+<br>
 [2] V. Starchenko and A. J. C. Ladd, The development of wormholes in laboratory scale fractures: perspectives from three-dimensional simulations, Water Resource Res., Submitted, 2018.
