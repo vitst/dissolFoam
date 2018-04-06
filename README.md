@@ -10,3 +10,8 @@ This version was developed with OpenFOAM-v1706. It should also work with v1712.
 
 Additional documentation about the libraries, solver and cases can be found in the file doc.pdf in the dissol1706 snapshot.
 
+If you use these codes for published work, please cite the following references:
+
+[1] V. Starchenko, C. J. Marra and A. J. C. Ladd, Three-dimensional simulations of fracture dissolution,
+J. Geophys. Res. Solid Earth, 121:6421-6444, 2016.
+[2] V. Starchenko and A. J. C. Ladd, The development of wormholes in laboratory scale fractures: perspectives from three-dimensional simulations, Water Resource Res., Submitted, 2018.
