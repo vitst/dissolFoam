@@ -62,28 +62,15 @@ int main(int argc, char *argv[])
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
 
   runTime.functionObjects().execute();     // Execute cntlDict functions
-  bool runTimeIs0 = (runTime.value()==0) ? true : false;
+  bool firstCycle = true;                  // Identify first cycle
 
   while (runTime.run())
   {
-    if( !runTimeIs0 )                      // No mesh update at t=0
-    {
-      runTime++;
-      Info << "Begin cycle: Time = " << runTime.timeName() 
-           << "    dt = " << runTime.deltaTValue()
-           << nl << endl;
-
-/*###############################################
- *    Mesh motion & relaxation
- *    Control parameters in dynamicMeshDict
- *###############################################*/
-
-      mesh.update();
-      Info << "Mesh update: ExecutionTime = " 
-           << runTime.elapsedCpuTime() << " s"
-           << "  ClockTime = " << runTime.elapsedClockTime() << " s"
-           << nl<< endl;
-    }
+    if (firstCycle)  firstCycle = false;   // Skip runTime++ on first cycle
+    else             runTime++;
+    Info << "Begin cycle: Time = " << runTime.timeName() 
+         << "    dt = " << runTime.deltaTValue()
+         << nl << endl;
     
 /*###############################################
  *   Steady-state flow solver
@@ -173,8 +160,18 @@ int main(int argc, char *argv[])
                - D*fvc::snGrad(C);
     
     Info << "Write fields: Time = " << runTime.timeName() << nl << endl;
-    (runTimeIs0) ? runTime.writeNow() : runTime.write();
-    runTimeIs0 = false;
+    runTime.writeNow();
+
+/*###############################################
+ *    Mesh motion & relaxation
+ *    Control parameters in dynamicMeshDict
+ *###############################################*/
+
+    mesh.update();
+    Info << "Mesh update: ExecutionTime = " 
+         << runTime.elapsedCpuTime() << " s"
+         << "  ClockTime = " << runTime.elapsedClockTime() << " s"
+         << nl<< endl;
   }
 
   Info << "End" << endl;
