@@ -30,7 +30,7 @@ Description
     reactant flux
  
     Works with official and extended versions of OpenFOAM
-    Currently: 4.x and v1706    Mar 2 2018
+    Currently: v1706 and v1712    May 26 2018
 
 \*---------------------------------------------------------------------------*/
 
@@ -45,7 +45,6 @@ Description
 
 // dissolFoam project
 #include "steadyStateControl.H"
-#include "pointPatchField.H"
 
 
 int main(int argc, char *argv[])
@@ -62,11 +61,11 @@ int main(int argc, char *argv[])
 // * * * * *   MAIN LOOP   * * * * * * * * * * * * * * * * * * * * * //
 
   runTime.functionObjects().execute();     // Execute cntlDict functions
-  bool runTimeIs0 = (runTime.value()==0) ? true : false;
+  bool firstCycle = true;                  // Identify first cycle
 
   while (runTime.run())
   {
-    if( !runTimeIs0 )                      // No mesh update at t=0
+    if (! firstCycle)                      // Skip runTime++ on first cycle
     {
       runTime++;
       Info << "Begin cycle: Time = " << runTime.timeName() 
@@ -173,8 +172,8 @@ int main(int argc, char *argv[])
                - D*fvc::snGrad(C);
     
     Info << "Write fields: Time = " << runTime.timeName() << nl << endl;
-    (runTimeIs0) ? runTime.writeNow() : runTime.write();
-    runTimeIs0 = false;
+    firstCycle ? runTime.writeNow() : runTime.write();
+    firstCycle = false;
   }
 
   Info << "End" << endl;
