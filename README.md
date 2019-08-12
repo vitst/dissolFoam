@@ -6,7 +6,7 @@ Mesh motion is controlled by the normalMotionSlip (libsFoamAux) Parameters to th
 
 Reaction boundary conditions (linear/nonlinear/danckwerts) are coded boundary conditions that are located in the case directory in constant/bcInclude (template files in libsFoamAux/boundaryConditions) The moving interface in polyMesh/boundary should go first.
 
-This version was developed with OpenFOAM-v1706. Check out the latest [releases](https://github.com/vitst/dissolFoam/releases) compartible with [OpenFOAM-v1712](openfoam.com) and [OpenFOAM-6](openfoam.org):
+This version was developed with OpenFOAM-v1712. Check out the latest [releases](https://github.com/vitst/dissolFoam/releases) compartible with [OpenFOAM-6](openfoam.org):
 
 Additional documentation about the libraries, solver and cases can be found in the file doc.pdf in the .zip attachment to the each release.
 
