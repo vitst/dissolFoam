@@ -45,7 +45,6 @@ Description
 
 // dissolFoam project
 #include "steadyStateControl.H"
-#include "pointPatchField.H"
 
 
 int main(int argc, char *argv[])
