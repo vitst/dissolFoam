@@ -75,24 +75,35 @@
       )
   );
 
+  const dimensionSet dimInvL2(0, -2, 0, 0, 0, 0, 0);
+  const dimensionSet dimDiffusion(0, 2, -1, 0, 0, 0, 0);
+
   dimensionedScalar Kinv
   (
-      transportProperties.lookup("Kinv")
+      "Kinv",
+      dimInvL2,
+      transportProperties
   );
 
   dimensionedScalar nu
   (
-      transportProperties.lookup("nu")
+      "nu",
+      dimDiffusion,
+      transportProperties
   );
 
   dimensionedScalar D
   (
-      transportProperties.lookup("D")
+      "D",
+      dimDiffusion,
+      transportProperties
   );
 
   dimensionedScalar lR
   (
-      transportProperties.lookup("lR")
+      "lR",
+      dimLength,
+      transportProperties
   );
 
   Info << "Reading convDiff subdirectory" << nl;
