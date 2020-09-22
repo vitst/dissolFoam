@@ -1,4 +1,4 @@
-This is the `OpenFoam`&reg solver for reactive transport with dissolution.
+This is the `OpenFoam`&reg; solver for reactive transport with dissolution.
 
 It solves for steady flow (Stokes or inertial) and reactant transport.
 
